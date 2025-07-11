@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2 } from 'lucide-react';
+// PERUBAHAN: Menghapus impor ikon yang tidak terpakai (ArrowLeft, History, Activity, Check)
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, Power, Trash2 } from 'lucide-react';
 
 // Helper function
 const formatCurrency = (value, includeSign = true) => {
