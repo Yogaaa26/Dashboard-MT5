@@ -125,15 +125,19 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
     return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
   }
 
+  const totalActivities = (account.positions?.length || 0) + (account.orders?.length || 0);
+  const singleItem = totalActivities === 1 ? (account.positions?.[0] || account.orders?.[0]) : null;
+  const isSingleItemPending = singleItem && (singleItem.executionType.includes('limit') || singleItem.executionType.includes('stop'));
+
   return (
-    // PERUBAHAN: Tinggi kartu diubah menjadi h-56 (lebih pendek)
-    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab h-56 ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
+    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
       <div className={`p-4 border-l-4 ${getBorderColor()} flex flex-col flex-grow min-h-0`}>
+        {/* Header Kartu (Sama untuk semua) */}
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
             <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
-            <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>
+            {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           <div className="flex items-center space-x-2">
             <button onClick={(e) => { e.stopPropagation(); onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on'); }} title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`} className="p-1 rounded-full hover:bg-slate-700 transition-colors">
@@ -145,29 +149,50 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           </div>
         </div>
         
-        <div className="flex-1 space-y-2 text-xs overflow-y-auto min-h-0 pr-1 custom-scrollbar">
-          {/* Daftar Posisi Aktif */}
-          {(account.positions && account.positions.length > 0) && account.positions.map(pos => (
-            <div key={pos.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                <div>{getTypePill(pos.executionType)}</div>
-                <div className="text-slate-300 font-semibold">{pos.pair}</div>
-                <div className="text-slate-400 text-right">Lot {pos.lotSize.toFixed(2)}</div>
-                <div className={`font-bold text-right ${pos.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(pos.profit)}</div>
-            </div>
-          ))}
-          {/* Daftar Order Pending */}
-          {(account.orders && account.orders.length > 0) && account.orders.map(ord => (
-             <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                <div>{getTypePill(ord.executionType)}</div>
-                <div className="text-slate-300 font-semibold">{ord.pair}</div>
-                <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
-                <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
-            </div>
-          ))}
-          {/* Pesan jika tidak ada aktivitas */}
+        {/* Konten Kartu (Dinamis) */}
+        <div className="flex-1 flex flex-col min-h-0">
           {account.status === 'inactive' && (
-            <div className="flex items-center justify-center h-full">
-                <p className="text-slate-400 italic">Tidak ada order aktif</p>
+            <div className="flex-1 flex items-center justify-center"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>
+          )}
+
+          {/* Tampilan untuk SATU aktivitas */}
+          {account.status === 'active' && totalActivities === 1 && singleItem && (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm flex-1">
+                <div><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold text-base">{singleItem.pair}</p></div>
+                <div><p className="text-slate-500 text-xs">Lot</p><p className="font-semibold text-base">{singleItem.lotSize.toFixed(2)}</p></div>
+                <div><p className="text-slate-500 text-xs">{isSingleItemPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold text-base">{singleItem.entryPrice.toFixed(3)}</p></div>
+                {!isSingleItemPending && <div><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold text-base">{singleItem.currentPrice.toFixed(3)}</p></div>}
+                <div className="col-span-2 self-end">
+                    <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-md">
+                        {getTypePill(singleItem.executionType)}
+                        {isSingleItemPending ? 
+                            <p className="text-lg font-bold text-yellow-400 flex items-center"><Clock size={16} className="mr-2"/> Pending</p> :
+                            <p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p>
+                        }
+                    </div>
+                </div>
+            </div>
+          )}
+
+          {/* Tampilan untuk BANYAK aktivitas */}
+          {account.status === 'active' && totalActivities > 1 && (
+            <div className="space-y-2 text-xs overflow-y-auto min-h-0 pr-1 custom-scrollbar">
+              {(account.positions || []).map(pos => (
+                <div key={pos.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                    <div>{getTypePill(pos.executionType)}</div>
+                    <div className="text-slate-300 font-semibold">{pos.pair}</div>
+                    <div className="text-slate-400 text-right">Lot {pos.lotSize.toFixed(2)}</div>
+                    <div className={`font-bold text-right ${pos.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(pos.profit)}</div>
+                </div>
+              ))}
+              {(account.orders || []).map(ord => (
+                 <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                    <div>{getTypePill(ord.executionType)}</div>
+                    <div className="text-slate-300 font-semibold">{ord.pair}</div>
+                    <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
+                    <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -176,12 +201,9 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   );
 };
 
-// PERUBAHAN: Komponen HistoryPage dikembalikan
 const HistoryPage = ({ accounts, history }) => {
-    // Catatan: 'history' saat ini adalah array kosong. Logika di bawah ini adalah placeholder.
     const accountSummary = useMemo(() => {
         return accounts.map(account => {
-            // Logika ini akan berjalan jika 'history' diisi dengan data riwayat transaksi
             const weeklyTrades = history.filter(trade => trade.accountName === account.accountName);
             const totalPL = weeklyTrades.reduce((sum, trade) => sum + trade.pl, 0);
 
@@ -191,7 +213,6 @@ const HistoryPage = ({ accounts, history }) => {
                 totalOrders: weeklyTrades.length,
                 totalPL: totalPL,
                 status: account.status,
-                // Ambil info dari posisi pertama jika ada, untuk status 'Floating'
                 entryPrice: (account.positions && account.positions.length > 0) ? account.positions[0].entryPrice : 0
             };
         }).sort((a,b) => a.name.localeCompare(b.name));
@@ -240,8 +261,8 @@ export default function App() {
   const [accounts, setAccounts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [notifications, setNotifications] = useState([]);
-  const [history] = useState([]); // Placeholder, belum diisi data
-  const [page, setPage] = useState('dashboard'); // PERUBAHAN: State untuk navigasi halaman dikembalikan
+  const [history] = useState([]);
+  const [page, setPage] = useState('dashboard');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, accountId: null, accountName: '' });
 
   const dragItem = useRef(null);
@@ -353,21 +374,11 @@ export default function App() {
 
   return (
     <div className="bg-slate-900 min-h-screen text-white font-sans p-4 sm:p-6 lg:p-8">
-      {/* PERUBAHAN: Menambahkan style kustom untuk scrollbar */}
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #475569; /* slate-600 */
-          border-radius: 20px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background-color: #64748b; /* slate-500 */
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 20px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
       `}</style>
       <div className="max-w-7xl mx-auto">
         <header className="mb-8 flex justify-between items-center">
@@ -375,7 +386,6 @@ export default function App() {
             <h1 className="text-3xl font-bold text-white">Dashboard MetaTrader</h1>
             <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
           </div>
-          {/* PERUBAHAN: Tombol navigasi dikembalikan */}
           {page === 'dashboard' ? (
             <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors">
                 <History size={20} />
@@ -390,7 +400,6 @@ export default function App() {
         </header>
 
         <main>
-            {/* PERUBAHAN: Tampilan kondisional dikembalikan */}
             {page === 'dashboard' ? (
                 <>
                   <div className="mb-6 relative">
