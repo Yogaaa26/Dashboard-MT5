@@ -179,8 +179,6 @@ export default function App() {
   const [accounts, setAccounts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [notifications, setNotifications] = useState([]);
-  const [history] = useState([]);
-  const [page, setPage] = useState('dashboard');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, accountId: null, accountName: '' });
 
   const dragItem = useRef(null);
@@ -296,23 +294,11 @@ export default function App() {
         <header className="mb-8 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-white">Dashboard MetaTrader</h1>
-            <p className="text-slate-400 mt-1">{page === 'dashboard' ? 'Ringkasan global dan status akun individual.' : 'Riwayat transaksi 1 minggu terakhir.'}</p>
+            <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
           </div>
-          {page === 'dashboard' ? (
-            <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors">
-                <History size={20} />
-                <span>Lihat Riwayat</span>
-            </button>
-          ) : (
-            <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors">
-                <ArrowLeft size={20} />
-                <span>Kembali ke Dashboard</span>
-            </button>
-          )}
         </header>
 
         <main>
-          {page === 'dashboard' ? (
             <>
               <div className="mb-6 relative">
                 <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -336,9 +322,6 @@ export default function App() {
                   ))}
               </div>
             </>
-          ) : (
-            <HistoryPage accounts={accounts} history={history} />
-          )}
         </main>
       </div>
       <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
