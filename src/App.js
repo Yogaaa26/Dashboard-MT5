@@ -131,8 +131,9 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   const isSingleItemPending = singleItem && (singleItem.executionType.includes('limit') || singleItem.executionType.includes('stop'));
 
   return (
-    <div className={`bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300 cursor-grab ${getGlowEffect()} ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
+    <div className={`bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300 cursor-grab relative ${getGlowEffect()} ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
+      
       <div className="p-4 flex flex-col flex-grow min-h-0">
         {/* Header Kartu */}
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
@@ -145,12 +146,9 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
             </div>
             {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
-          <div className="flex flex-col items-end gap-y-2">
-            <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="p-1 rounded-full text-slate-500 hover:bg-slate-700 hover:text-red-500 transition-colors">
-              <Trash2 size={18} />
-            </button>
-            {totalActivities === 1 && singleItem && <div className="mt-2">{getTypePill(singleItem.executionType)}</div>}
-          </div>
+          {totalActivities === 1 && singleItem && (
+            <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
+          )}
         </div>
         
         {/* Konten Kartu (Dinamis) */}
@@ -162,37 +160,17 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           {/* Tampilan untuk SATU aktivitas (seperti di screenshot) */}
           {account.status === 'active' && totalActivities === 1 && singleItem && (
             <div className="grid grid-cols-3 gap-x-4 text-sm flex-1">
-                {/* Left side: 2x2 grid */}
                 <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-4">
-                    <div>
-                        <p className="text-slate-500 text-xs">Pair</p>
-                        <p className="font-semibold text-lg">{singleItem.pair}</p>
-                    </div>
-                    <div>
-                        <p className="text-slate-500 text-xs">Lot</p>
-                        <p className="font-semibold text-lg">{singleItem.lotSize.toFixed(2)}</p>
-                    </div>
-                    <div>
-                        <p className="text-slate-500 text-xs">{isSingleItemPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p>
-                        <p className="font-semibold text-lg">{singleItem.entryPrice.toFixed(3)}</p>
-                    </div>
-                    <div>
-                        <p className="text-slate-500 text-xs">Harga Sekarang</p>
-                        <p className="font-semibold text-lg">{singleItem.currentPrice ? singleItem.currentPrice.toFixed(3) : '...'}</p>
-                    </div>
+                    <div><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold text-lg">{singleItem.pair}</p></div>
+                    <div><p className="text-slate-500 text-xs">Lot</p><p className="font-semibold text-lg">{singleItem.lotSize.toFixed(2)}</p></div>
+                    <div><p className="text-slate-500 text-xs">{isSingleItemPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold text-lg">{singleItem.entryPrice.toFixed(3)}</p></div>
+                    <div><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold text-lg">{singleItem.currentPrice ? singleItem.currentPrice.toFixed(3) : '...'}</p></div>
                 </div>
-
-                {/* Right side: Status */}
                 <div className="flex flex-col justify-start items-end">
                     <p className="text-slate-500 text-xs mb-1">Status</p>
                      {isSingleItemPending ? 
-                        <div className="text-right">
-                            <p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p>
-                        </div>
-                         :
-                        <div className="text-right">
-                             <p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p>
-                        </div>
+                        <div className="text-right"><p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p></div> :
+                        <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
                     }
                 </div>
             </div>
@@ -221,6 +199,10 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           )}
         </div>
       </div>
+      {/* Tombol Hapus Dipindahkan ke Sini */}
+      <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="absolute bottom-3 right-3 p-1 rounded-full text-slate-600 hover:bg-slate-900/50 hover:text-red-500 transition-all duration-200 opacity-50 hover:opacity-100">
+        <Trash2 size={16} />
+      </button>
     </div>
   );
 };
