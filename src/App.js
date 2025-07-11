@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-// PERUBAHAN: Mengembalikan impor ikon yang dibutuhkan untuk Halaman Riwayat
 import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2 } from 'lucide-react';
 
 // Helper function
@@ -15,7 +14,7 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 animate-fade-in">
-            <div className="bg-slate-800 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl border border-slate-700">
+            <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl border border-slate-700">
                 <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
                 <p className="text-sm text-slate-300 mb-6">{message}</p>
                 <div className="flex justify-end space-x-4">
@@ -39,7 +38,7 @@ const Notification = ({ notification, onClose }) => {
   const iconColor = isProfit ? 'text-green-400' : (isLoss ? 'text-red-400' : 'text-blue-400');
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-4 flex items-start space-x-3 animate-fade-in-up">
+    <div className="bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl p-4 flex items-start space-x-3 animate-fade-in-up">
       <Icon className={`${iconColor} mt-1 flex-shrink-0`} size={20} />
       <div className="flex-1">
         <p className="text-sm text-white font-semibold">{notification.title}</p>
@@ -59,8 +58,8 @@ const NotificationContainer = ({ notifications, removeNotification }) => (
 );
 
 const SummaryStat = ({ icon, title, value, colorClass = 'text-white' }) => (
-  <div className="bg-slate-800 p-4 rounded-lg shadow-lg flex items-center space-x-4 border border-slate-700">
-    <div className="bg-slate-900 p-3 rounded-full">{icon}</div>
+  <div className="bg-slate-800/70 backdrop-blur-sm p-4 rounded-xl shadow-lg flex items-center space-x-4 border border-slate-700 transition-all duration-300 hover:bg-slate-700/80">
+    <div className="bg-slate-900/80 p-3 rounded-full">{icon}</div>
     <div>
       <p className="text-sm text-slate-400">{title}</p>
       <p className={`text-lg font-bold ${colorClass}`}>{value}</p>
@@ -111,9 +110,11 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   const totalPL = useMemo(() => (account.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0), [account.positions]);
   const isProfitable = totalPL > 0;
   
-  const getBorderColor = () => {
-    if (account.status !== 'active') return 'border-slate-600';
-    return isProfitable ? 'border-green-500' : 'border-red-500';
+  const getGlowEffect = () => {
+    if (account.status !== 'active') return 'shadow-slate-900/50';
+    if (isProfitable) return 'shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.4)]';
+    if (totalPL < 0) return 'shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:shadow-[0_0_25px_rgba(239,68,68,0.4)]';
+    return 'shadow-slate-900/50';
   };
 
   const getTypePill = (type) => {
@@ -130,32 +131,29 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   const isSingleItemPending = singleItem && (singleItem.executionType.includes('limit') || singleItem.executionType.includes('stop'));
 
   return (
-    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
+    <div className={`bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300 cursor-grab ${getGlowEffect()} ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
-      <div className={`p-4 border-l-4 ${getBorderColor()} flex flex-col flex-grow min-h-0`}>
-        {/* Header Kartu (Sama untuk semua) */}
+      <div className="p-4 flex flex-col flex-grow min-h-0">
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
-            <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
+            <div className="flex items-center gap-x-2 mb-1">
+              <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
+              <button onClick={(e) => { e.stopPropagation(); onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on'); }} title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`} className="p-1 rounded-full hover:bg-slate-700 transition-colors">
+                <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
+              </button>
+            </div>
             {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
-          <div className="flex items-center space-x-2">
-            <button onClick={(e) => { e.stopPropagation(); onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on'); }} title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`} className="p-1 rounded-full hover:bg-slate-700 transition-colors">
-              <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="p-1 rounded-full text-slate-500 hover:bg-slate-700 hover:text-red-500 transition-colors">
-              <Trash2 size={18} />
-            </button>
-          </div>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="p-1 rounded-full text-slate-500 hover:bg-slate-700 hover:text-red-500 transition-colors">
+            <Trash2 size={18} />
+          </button>
         </div>
         
-        {/* Konten Kartu (Dinamis) */}
         <div className="flex-1 flex flex-col min-h-0">
           {account.status === 'inactive' && (
             <div className="flex-1 flex items-center justify-center"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>
           )}
 
-          {/* Tampilan untuk SATU aktivitas */}
           {account.status === 'active' && totalActivities === 1 && singleItem && (
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm flex-1">
                 <div><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold text-base">{singleItem.pair}</p></div>
@@ -174,7 +172,6 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
             </div>
           )}
 
-          {/* Tampilan untuk BANYAK aktivitas */}
           {account.status === 'active' && totalActivities > 1 && (
             <div className="space-y-2 text-xs overflow-y-auto min-h-0 pr-1 custom-scrollbar">
               {(account.positions || []).map(pos => (
@@ -222,7 +219,7 @@ const HistoryPage = ({ accounts, history }) => {
         <div className="animate-fade-in">
             <h2 className="text-2xl font-bold text-white mb-4">Riwayat Kinerja Akun</h2>
             <p className="text-slate-400 mb-6 -mt-4">Fitur ini sedang dalam pengembangan. Data riwayat belum dikirim dari EA.</p>
-            <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-x-auto">
+            <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700 overflow-x-auto">
                 <table className="w-full text-sm text-left text-slate-300">
                     <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
                         <tr>
@@ -373,7 +370,7 @@ export default function App() {
   }, [accounts, searchTerm]);
 
   return (
-    <div className="bg-slate-900 min-h-screen text-white font-sans p-4 sm:p-6 lg:p-8">
+    <div className="bg-gradient-to-br from-slate-900 to-gray-900 min-h-screen text-white font-sans p-4 sm:p-6 lg:p-8">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -381,18 +378,18 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
       `}</style>
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8 flex justify-between items-center">
+        <header className="mb-8 flex justify-between items-center border-b border-slate-700 pb-4">
           <div>
             <h1 className="text-3xl font-bold text-white">Dashboard MetaTrader</h1>
             <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
           </div>
           {page === 'dashboard' ? (
-            <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors">
+            <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
                 <History size={20} />
                 <span>Lihat Riwayat</span>
             </button>
           ) : (
-            <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors">
+            <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
                 <ArrowLeft size={20} />
                 <span>Kembali ke Dashboard</span>
             </button>
@@ -403,7 +400,7 @@ export default function App() {
             {page === 'dashboard' ? (
                 <>
                   <div className="mb-6 relative">
-                    <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800/70 backdrop-blur-sm border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                   </div>
                   
