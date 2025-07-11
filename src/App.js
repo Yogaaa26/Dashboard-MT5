@@ -125,7 +125,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
     else if (type === 'sell') { bgColor = 'bg-red-600/20'; textColor = 'text-red-400'; }
     return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
   }
-
+  
   const totalActivities = (account.positions?.length || 0) + (account.orders?.length || 0);
   const singleItem = totalActivities === 1 ? (account.positions?.[0] || account.orders?.[0]) : null;
   const isSingleItemPending = singleItem && (singleItem.executionType.includes('limit') || singleItem.executionType.includes('stop'));
@@ -134,6 +134,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
     <div className={`bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300 cursor-grab ${getGlowEffect()} ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
       <div className="p-4 flex flex-col flex-grow min-h-0">
+        {/* Header Kartu */}
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-x-2 mb-1">
@@ -144,16 +145,21 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
             </div>
             {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="p-1 rounded-full text-slate-500 hover:bg-slate-700 hover:text-red-500 transition-colors">
-            <Trash2 size={18} />
-          </button>
+          <div className="flex flex-col items-end gap-y-2">
+            <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="p-1 rounded-full text-slate-500 hover:bg-slate-700 hover:text-red-500 transition-colors">
+              <Trash2 size={18} />
+            </button>
+            {totalActivities === 1 && singleItem && <div className="mt-2">{getTypePill(singleItem.executionType)}</div>}
+          </div>
         </div>
         
+        {/* Konten Kartu (Dinamis) */}
         <div className="flex-1 flex flex-col min-h-0">
           {account.status === 'inactive' && (
             <div className="flex-1 flex items-center justify-center"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>
           )}
 
+          {/* Tampilan untuk SATU aktivitas (seperti di screenshot) */}
           {account.status === 'active' && totalActivities === 1 && singleItem && (
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm flex-1">
                 <div><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold text-base">{singleItem.pair}</p></div>
@@ -161,8 +167,8 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 <div><p className="text-slate-500 text-xs">{isSingleItemPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold text-base">{singleItem.entryPrice.toFixed(3)}</p></div>
                 {!isSingleItemPending && <div><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold text-base">{singleItem.currentPrice.toFixed(3)}</p></div>}
                 <div className="col-span-2 self-end">
-                    <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-md">
-                        {getTypePill(singleItem.executionType)}
+                    <div className="flex justify-between items-center mt-2">
+                        <p className="text-slate-500 text-xs">Status</p>
                         {isSingleItemPending ? 
                             <p className="text-lg font-bold text-yellow-400 flex items-center"><Clock size={16} className="mr-2"/> Pending</p> :
                             <p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p>
@@ -172,6 +178,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
             </div>
           )}
 
+          {/* Tampilan untuk BANYAK aktivitas (scrollable list) */}
           {account.status === 'active' && totalActivities > 1 && (
             <div className="space-y-2 text-xs overflow-y-auto min-h-0 pr-1 custom-scrollbar">
               {(account.positions || []).map(pos => (
