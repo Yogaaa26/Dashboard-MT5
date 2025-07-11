@@ -249,7 +249,7 @@ export default function App() {
   const [accounts, setAccounts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [notifications, setNotifications] = useState([]);
-  const [history, setHistory] = useState([]);
+  const [history] = useState([]); // PERUBAHAN: Menghapus setHistory yang tidak terpakai
   const [page, setPage] = useState('dashboard');
 
   const dragItem = useRef(null);
@@ -262,7 +262,6 @@ export default function App() {
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
   // Mengambil data dari server dan menerapkan urutan yang disimpan
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const fetchData = async () => {
       try {
