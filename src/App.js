@@ -91,6 +91,8 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
   const isPending = account.executionType.includes('limit') || account.executionType.includes('stop');
 
   const getExecutionTypePill = () => {
+    if (account.status === 'inactive') return null;
+    
     const type = account.executionType;
     let bgColor = 'bg-gray-500', textColor = 'text-white';
     if (type === 'buy_stop' || type === 'buy_limit') { bgColor = 'bg-white'; textColor = 'text-black'; }
@@ -116,7 +118,7 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onToggleRobot(account.id, account.robotStatus === 'on' ? 'off' : 'on');
+                onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on');
               }}
               title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`}
               className="p-1 rounded-full hover:bg-slate-700 transition-colors"
@@ -130,10 +132,11 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
           </div>
           {getExecutionTypePill()}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-          <div className="text-slate-300"><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold">{account.pair}</p></div>
-          <div className="text-slate-300"><p className="text-slate-500 text-xs">Lot</p><p className="font-semibold">{account.lotSize.toFixed(2)}</p></div>
-          {account.status === 'active' && (
+        
+        {account.status === 'active' ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+            <div className="text-slate-300"><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold">{account.pair}</p></div>
+            <div className="text-slate-300"><p className="text-slate-500 text-xs">Lot</p><p className="font-semibold">{account.lotSize.toFixed(2)}</p></div>
             <div className="text-slate-300 col-span-2 md:col-span-1 md:row-span-2 md:self-center md:text-right">
               {isPending ? (
                 <><p className="text-slate-500 text-xs">Status</p><p className="text-xl font-bold text-yellow-500 flex items-center justify-end"><Clock size={18} className="mr-2" /> Pending</p></>
@@ -141,14 +144,14 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
                 <><p className="text-slate-500 text-xs">Profit/Loss</p><p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(profitLoss)}</p></>
               )}
             </div>
-          )}
-          {account.status === 'active' ? (
-            <>
-              <div className="text-slate-300"><p className="text-slate-500 text-xs">{isPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold">{account.entryPrice.toFixed(3)}</p></div>
-              <div className="text-slate-300"><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold">{account.currentPrice.toFixed(3)}</p></div>
-            </>
-          ) : (<div className="col-span-2 md:col-span-3 flex items-center justify-center h-full bg-slate-800/50 rounded-md p-4 my-2"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>)}
-        </div>
+            <div className="text-slate-300"><p className="text-slate-500 text-xs">{isPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold">{account.entryPrice.toFixed(3)}</p></div>
+            <div className="text-slate-300"><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold">{account.currentPrice.toFixed(3)}</p></div>
+          </div>
+        ) : (
+          <div className="col-span-2 md:col-span-3 flex items-center justify-center h-full bg-slate-800/50 rounded-md p-4 my-2">
+            <p className="text-slate-400 italic">Tidak ada order aktif</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -249,7 +252,7 @@ export default function App() {
   const [accounts, setAccounts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [notifications, setNotifications] = useState([]);
-  const [history] = useState([]); // PERUBAHAN: Menghapus setHistory yang tidak terpakai
+  const [history] = useState([]);
   const [page, setPage] = useState('dashboard');
 
   const dragItem = useRef(null);
@@ -261,7 +264,6 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
-  // Mengambil data dari server dan menerapkan urutan yang disimpan
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -301,7 +303,7 @@ export default function App() {
   const handleToggleRobot = async (accountId, newStatus) => {
     setAccounts(prevAccounts =>
       prevAccounts.map(account =>
-        account.id === accountId
+        account.accountId === accountId
           ? { ...account, robotStatus: newStatus }
           : account
       )
@@ -317,7 +319,7 @@ export default function App() {
         console.error("Gagal mengirim perintah ke server:", error);
         setAccounts(prevAccounts =>
           prevAccounts.map(account =>
-            account.id === accountId
+            account.accountId === accountId
               ? { ...account, robotStatus: newStatus === 'on' ? 'off' : 'on' }
               : account
           )
@@ -389,7 +391,7 @@ export default function App() {
               <DashboardView
                 accounts={accounts}
                 searchTerm={searchTerm}
-                onToggleRobot={handleToggleRobot}
+                onToggleRobot={onToggleRobot}
                 handleDragStart={handleDragStart}
                 handleDragEnter={handleDragEnter}
                 handleDragEnd={handleDragEnd}

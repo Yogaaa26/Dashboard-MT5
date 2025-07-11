@@ -1,5 +1,5 @@
 // /api/index.js
-// Revisi dengan integrasi Firebase Realtime Database
+// Revisi dengan penyimpanan berdasarkan accountId
 
 const express = require('express');
 const cors = require('cors');
@@ -7,8 +7,7 @@ const { initializeApp } = require('firebase/app');
 const { getDatabase, ref, set, get, remove } = require("firebase/database");
 const app = express();
 
-// --- KONFIGURASI FIREBASE ---
-// Variabel ini akan diambil dari Environment Variables di Vercel
+// Konfigurasi Firebase diambil dari Environment Variables Vercel
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
   authDomain: process.env.FIREBASE_AUTH_DOMAIN,
@@ -19,11 +18,9 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID
 };
 
-// Inisialisasi Firebase
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
-// Middleware
 app.use(cors());
 
 // Rute untuk menerima update dari EA
@@ -37,10 +34,10 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
             return res.status(400).send({ error: 'accountId dibutuhkan dari EA' });
         }
         
-        // Gunakan ID unik dari EA sebagai key
-        const dataId = data.id || `${accountId}-fallback`;
-        await set(ref(db, `accounts/${dataId}`), data);
-        console.log(`Update BERHASIL dari Akun: ${accountId} ke Firebase`);
+        // PERUBAHAN KUNCI: Gunakan accountId sebagai key di Firebase
+        // Ini akan selalu menimpa data untuk akun yang sama, bukan membuat baru.
+        await set(ref(db, `accounts/${accountId}`), data);
+        console.log(`Update BERHASIL untuk Akun: ${accountId}`);
 
         const commandRef = ref(db, `commands/${accountId}`);
         const snapshot = await get(commandRef);
@@ -57,23 +54,18 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     }
 });
 
-// Rute untuk frontend mengambil data
+// Rute untuk frontend mengambil data (tidak perlu diubah)
 app.get('/api/accounts', async (req, res) => {
     try {
         const accountsRef = ref(db, 'accounts');
         const snapshot = await get(accountsRef);
-        if (snapshot.exists()) {
-            res.json(snapshot.val());
-        } else {
-            res.json({});
-        }
+        res.json(snapshot.exists() ? snapshot.val() : {});
     } catch (error) {
-        console.error("Gagal mengambil data dari Firebase:", error);
         res.status(500).send({ error: "Gagal mengambil data akun." });
     }
 });
 
-// Rute untuk menerima perintah toggle robot
+// Rute untuk menerima perintah toggle robot (tidak perlu diubah)
 app.post('/api/robot-toggle', express.json(), async (req, res) => {
     const { accountId, newStatus } = req.body;
     if (!accountId || !newStatus) {
@@ -84,7 +76,6 @@ app.post('/api/robot-toggle', express.json(), async (req, res) => {
         await set(ref(db, `commands/${accountId}`), command);
         res.json({ message: `Perintah untuk Akun ${accountId} dicatat.` });
     } catch (error) {
-        console.error("Gagal menyimpan perintah ke Firebase:", error);
         res.status(500).send({ error: "Gagal menyimpan perintah." });
     }
 });
