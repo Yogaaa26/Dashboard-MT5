@@ -161,19 +161,39 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
 
           {/* Tampilan untuk SATU aktivitas (seperti di screenshot) */}
           {account.status === 'active' && totalActivities === 1 && singleItem && (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm flex-1">
-                <div><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold text-base">{singleItem.pair}</p></div>
-                <div><p className="text-slate-500 text-xs">Lot</p><p className="font-semibold text-base">{singleItem.lotSize.toFixed(2)}</p></div>
-                <div><p className="text-slate-500 text-xs">{isSingleItemPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold text-base">{singleItem.entryPrice.toFixed(3)}</p></div>
-                {!isSingleItemPending && <div><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold text-base">{singleItem.currentPrice.toFixed(3)}</p></div>}
-                <div className="col-span-2 self-end">
-                    <div className="flex justify-between items-center mt-2">
-                        <p className="text-slate-500 text-xs">Status</p>
-                        {isSingleItemPending ? 
-                            <p className="text-lg font-bold text-yellow-400 flex items-center"><Clock size={16} className="mr-2"/> Pending</p> :
-                            <p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p>
-                        }
+            <div className="grid grid-cols-3 gap-x-4 text-sm flex-1">
+                {/* Left side: 2x2 grid */}
+                <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-4">
+                    <div>
+                        <p className="text-slate-500 text-xs">Pair</p>
+                        <p className="font-semibold text-lg">{singleItem.pair}</p>
                     </div>
+                    <div>
+                        <p className="text-slate-500 text-xs">Lot</p>
+                        <p className="font-semibold text-lg">{singleItem.lotSize.toFixed(2)}</p>
+                    </div>
+                    <div>
+                        <p className="text-slate-500 text-xs">{isSingleItemPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p>
+                        <p className="font-semibold text-lg">{singleItem.entryPrice.toFixed(3)}</p>
+                    </div>
+                    <div>
+                        <p className="text-slate-500 text-xs">Harga Sekarang</p>
+                        <p className="font-semibold text-lg">{singleItem.currentPrice ? singleItem.currentPrice.toFixed(3) : '...'}</p>
+                    </div>
+                </div>
+
+                {/* Right side: Status */}
+                <div className="flex flex-col justify-start items-end">
+                    <p className="text-slate-500 text-xs mb-1">Status</p>
+                     {isSingleItemPending ? 
+                        <div className="text-right">
+                            <p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p>
+                        </div>
+                         :
+                        <div className="text-right">
+                             <p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p>
+                        </div>
+                    }
                 </div>
             </div>
           )}
