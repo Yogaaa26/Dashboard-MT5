@@ -157,8 +157,6 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
   );
 };
 
-// PERUBAHAN: Komponen DashboardView dihapus untuk menyederhanakan
-
 const HistoryPage = ({ accounts, history }) => {
     const accountSummary = useMemo(() => {
         const oneWeekAgo = new Date();
@@ -239,6 +237,7 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
+  // PERUBAHAN KUNCI: Logika disederhanakan untuk mengatasi bug duplikasi
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -246,23 +245,13 @@ export default function App() {
         const data = await response.json();
 
         if (data && typeof data === 'object') {
+            // Langsung konversi data dari server ke array
             let serverAccounts = Object.values(data);
+            
+            // Urutkan berdasarkan nama akun untuk urutan yang konsisten
+            serverAccounts.sort((a, b) => a.accountName.localeCompare(b.accountName));
 
-            const savedOrderJSON = localStorage.getItem(LOCAL_STORAGE_KEY);
-            if (savedOrderJSON) {
-                const savedOrder = JSON.parse(savedOrderJSON);
-                const accountMap = new Map(serverAccounts.map(acc => [acc.id, acc]));
-
-                const sortedAccounts = savedOrder
-                    .map(id => accountMap.get(id))
-                    .filter(Boolean);
-
-                const newAccounts = serverAccounts.filter(acc => !savedOrder.includes(acc.id));
-
-                setAccounts([...sortedAccounts, ...newAccounts]);
-            } else {
-                setAccounts(serverAccounts);
-            }
+            setAccounts(serverAccounts);
         }
       } catch (error) {
         console.error("Gagal mengambil data dari server:", error);
@@ -312,6 +301,7 @@ export default function App() {
     dragOverItem.current = pos;
   };
 
+  // PERUBAHAN KUNCI: Logika penyimpanan urutan dinonaktifkan untuk sementara
   const handleDragEnd = () => {
     if (dragOverItem.current === null || dragItem.current === dragOverItem.current) {
       setDragging(false);
@@ -325,8 +315,8 @@ export default function App() {
     accountsCopy.splice(dragItem.current, 1);
     accountsCopy.splice(dragOverItem.current, 0, dragItemContent);
 
-    const newOrder = accountsCopy.map(acc => acc.id);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newOrder));
+    // Untuk sementara, jangan simpan urutan ke localStorage untuk mencegah bug
+    // localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newOrder));
 
     setAccounts(accountsCopy);
 
@@ -335,7 +325,6 @@ export default function App() {
     setDragging(false);
   };
 
-  // PERUBAHAN: Logika filter dipindahkan ke sini dari DashboardView
   const filteredAccounts = useMemo(() => {
     if (!searchTerm) return accounts;
     return accounts.filter(account => account.accountName.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -370,7 +359,6 @@ export default function App() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               </div>
               
-              {/* PERUBAHAN: Tampilan dirender langsung di sini */}
               <SummaryDashboard accounts={accounts} />
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {filteredAccounts.map((account, index) => (
