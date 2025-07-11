@@ -126,8 +126,8 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   }
 
   return (
-    // PERUBAHAN: Menetapkan tinggi kartu yang tetap dan layout flex kolom
-    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab h-96 ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
+    // PERUBAHAN: Tinggi kartu diubah dari h-96 menjadi h-72 agar lebih pendek
+    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab h-72 ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
       <div className={`p-4 border-l-4 ${getBorderColor()} flex flex-col flex-grow`}>
         <div className="flex justify-between items-start mb-4">
@@ -145,7 +145,6 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           </div>
         </div>
         
-        {/* PERUBAHAN: Membuat area ini bisa di-scroll jika kontennya banyak */}
         <div className="flex-1 space-y-3 text-xs overflow-y-auto min-h-0 pr-2">
           {/* Daftar Posisi Aktif */}
           {(account.positions && account.positions.length > 0) && account.positions.map(pos => (
