@@ -1,39 +1,25 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2 } from 'lucide-react';
 
-// Helper function to format currency
+// Helper function
 const formatCurrency = (value, includeSign = true) => {
   const absValue = Math.abs(value);
   const sign = value < 0 ? '-' : (includeSign ? '+' : '');
   return `${sign}$${absValue.toFixed(2)}`;
 };
 
-// Shared Logic
-const calculatePL = (account) => {
-  const isPending = account.executionType.includes('limit') || account.executionType.includes('stop');
-  if (account.status !== 'active' || isPending) {
-    return 0;
-  }
-  return parseFloat(account.profit) || 0;
-};
-
 // --- React Components ---
 
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
     if (!isOpen) return null;
-
     return (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 animate-fade-in">
             <div className="bg-slate-800 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl border border-slate-700">
                 <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
                 <p className="text-sm text-slate-300 mb-6">{message}</p>
                 <div className="flex justify-end space-x-4">
-                    <button onClick={onCancel} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                        Batal
-                    </button>
-                    <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                        Hapus
-                    </button>
+                    <button onClick={onCancel} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Batal</button>
+                    <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Hapus</button>
                 </div>
             </div>
         </div>
@@ -83,21 +69,37 @@ const SummaryStat = ({ icon, title, value, colorClass = 'text-white' }) => (
 
 const SummaryDashboard = ({ accounts }) => {
   const summary = useMemo(() => {
-    const activeAccounts = accounts.filter(acc => acc.status === 'active');
-    const profitsAndLosses = activeAccounts.map(calculatePL);
-    const profitableAccounts = profitsAndLosses.filter(pl => pl > 0).length;
-    const losingAccounts = profitsAndLosses.filter(pl => pl < 0).length;
-    const totalPL = profitsAndLosses.reduce((sum, pl) => sum + pl, 0);
-    const pendingOrdersCount = activeAccounts.filter(acc => acc.executionType.includes('limit') || acc.executionType.includes('stop')).length;
-    return { totalAccounts: accounts.length, activeAccountsCount: activeAccounts.length, profitableAccounts, losingAccounts, pendingOrdersCount, totalPL };
+    let totalPL = 0;
+    let profitableAccounts = 0;
+    let losingAccounts = 0;
+    let pendingOrdersCount = 0;
+
+    accounts.forEach(acc => {
+        if (acc.status === 'active') {
+            const accountPL = (acc.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0);
+            totalPL += accountPL;
+            if (accountPL > 0) profitableAccounts++;
+            if (accountPL < 0) losingAccounts++;
+            pendingOrdersCount += (acc.orders || []).length;
+        }
+    });
+    
+    return { 
+        totalAccounts: accounts.length, 
+        activeAccountsCount: accounts.filter(acc => acc.status === 'active').length, 
+        profitableAccounts, 
+        losingAccounts, 
+        pendingOrdersCount, 
+        totalPL 
+    };
   }, [accounts]);
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
       <SummaryStat icon={<Briefcase size={24} className="text-blue-400" />} title="Total Akun" value={summary.totalAccounts} />
       <SummaryStat icon={<List size={24} className="text-cyan-400" />} title="Akun Aktif" value={summary.activeAccountsCount} />
-      <SummaryStat icon={<TrendingUp size={24} className="text-green-400" />} title="Floating Profit" value={summary.profitableAccounts} colorClass="text-green-500" />
-      <SummaryStat icon={<TrendingDown size={24} className="text-red-400" />} title="Floating Minus" value={summary.losingAccounts} colorClass="text-red-500" />
+      <SummaryStat icon={<TrendingUp size={24} className="text-green-400" />} title="Akun Profit" value={summary.profitableAccounts} colorClass="text-green-500" />
+      <SummaryStat icon={<TrendingDown size={24} className="text-red-400" />} title="Akun Minus" value={summary.losingAccounts} colorClass="text-red-500" />
       <SummaryStat icon={<Clock size={24} className="text-yellow-400" />} title="Order Pending" value={summary.pendingOrdersCount} colorClass="text-yellow-500" />
       <SummaryStat icon={<DollarSign size={24} className={summary.totalPL >= 0 ? 'text-green-400' : 'text-red-400'} />} title="Total P/L" value={formatCurrency(summary.totalPL, false)} colorClass={summary.totalPL >= 0 ? 'text-green-500' : 'text-red-500'} />
     </div>
@@ -105,149 +107,72 @@ const SummaryDashboard = ({ accounts }) => {
 };
 
 const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
-  const profitLoss = useMemo(() => calculatePL(account), [account]);
-  const isProfitable = profitLoss > 0;
-  const isPending = account.executionType.includes('limit') || account.executionType.includes('stop');
-
-  const getExecutionTypePill = () => {
-    if (account.status === 'inactive') return null;
-    
-    const type = account.executionType;
-    let bgColor = 'bg-gray-500', textColor = 'text-white';
-    if (type === 'buy_stop' || type === 'buy_limit') { bgColor = 'bg-white'; textColor = 'text-black'; }
-    else if (type === 'sell_stop' || type === 'sell_limit') { bgColor = 'bg-yellow-600'; }
-    else if (type === 'buy') { bgColor = 'bg-blue-600'; }
-    else if (type === 'sell') { bgColor = 'bg-red-600'; }
-    return <span className={`px-3 py-1 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
-  };
-
+  const totalPL = useMemo(() => (account.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0), [account.positions]);
+  const isProfitable = totalPL > 0;
+  
   const getBorderColor = () => {
     if (account.status !== 'active') return 'border-slate-600';
-    if (isPending) return 'border-yellow-500';
     return isProfitable ? 'border-green-500' : 'border-red-500';
   };
+
+  const getTypePill = (type) => {
+    let bgColor = 'bg-gray-500', textColor = 'text-white';
+    if (type === 'buy_stop' || type === 'buy_limit') { bgColor = 'bg-yellow-500/20'; textColor = 'text-yellow-400'; }
+    else if (type === 'sell_stop' || type === 'sell_limit') { bgColor = 'bg-yellow-500/20'; textColor = 'text-yellow-400'; }
+    else if (type === 'buy') { bgColor = 'bg-blue-600/20'; textColor = 'text-blue-400'; }
+    else if (type === 'sell') { bgColor = 'bg-red-600/20'; textColor = 'text-red-400'; }
+    return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
+  }
 
   return (
     <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
       <div className={`p-4 border-l-4 ${getBorderColor()} flex-grow`}>
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex items-center space-x-2">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1">
             <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on');
-              }}
-              title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`}
-              className="p-1 rounded-full hover:bg-slate-700 transition-colors"
-            >
-              <Power
-                size={18}
-                className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'
-                  } transition-colors`}
-              />
+            <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button onClick={(e) => { e.stopPropagation(); onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on'); }} title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`} className="p-1 rounded-full hover:bg-slate-700 transition-colors">
+              <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
             </button>
-             <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(account.accountId, account.accountName);
-                }}
-                title="Hapus Akun"
-                className="p-1 rounded-full text-slate-500 hover:bg-slate-700 hover:text-red-500 transition-colors"
-            >
-                <Trash2 size={18} />
+            <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="p-1 rounded-full text-slate-500 hover:bg-slate-700 hover:text-red-500 transition-colors">
+              <Trash2 size={18} />
             </button>
           </div>
-          {getExecutionTypePill()}
         </div>
         
-        {account.status === 'active' ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
-            <div className="text-slate-300"><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold">{account.pair}</p></div>
-            <div className="text-slate-300"><p className="text-slate-500 text-xs">Lot</p><p className="font-semibold">{account.lotSize.toFixed(2)}</p></div>
-            <div className="text-slate-300 col-span-2 md:col-span-1 md:row-span-2 md:self-center md:text-right">
-              {isPending ? (
-                <><p className="text-slate-500 text-xs">Status</p><p className="text-xl font-bold text-yellow-500 flex items-center justify-end"><Clock size={18} className="mr-2" /> Pending</p></>
-              ) : (
-                <><p className="text-slate-500 text-xs">Profit/Loss</p><p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(profitLoss)}</p></>
-              )}
+        <div className="space-y-3 text-xs">
+          {/* Daftar Posisi Aktif */}
+          {(account.positions && account.positions.length > 0) && account.positions.map(pos => (
+            <div key={pos.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                <div>{getTypePill(pos.executionType)}</div>
+                <div className="text-slate-300 font-semibold">{pos.pair}</div>
+                <div className="text-slate-400 text-right">Lot {pos.lotSize.toFixed(2)}</div>
+                <div className={`font-bold text-right ${pos.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(pos.profit)}</div>
             </div>
-            <div className="text-slate-300"><p className="text-slate-500 text-xs">{isPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold">{account.entryPrice.toFixed(3)}</p></div>
-            <div className="text-slate-300"><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold">{account.currentPrice.toFixed(3)}</p></div>
-          </div>
-        ) : (
-          <div className="col-span-2 md:col-span-3 flex items-center justify-center h-full bg-slate-800/50 rounded-md p-4 my-2">
-            <p className="text-slate-400 italic">Tidak ada order aktif</p>
-          </div>
-        )}
+          ))}
+          {/* Daftar Order Pending */}
+          {(account.orders && account.orders.length > 0) && account.orders.map(ord => (
+             <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                <div>{getTypePill(ord.executionType)}</div>
+                <div className="text-slate-300 font-semibold">{ord.pair}</div>
+                <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
+                <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
+            </div>
+          ))}
+          {/* Pesan jika tidak ada aktivitas */}
+          {account.status === 'inactive' && (
+            <div className="flex items-center justify-center h-full bg-slate-800/50 rounded-md p-4">
+                <p className="text-slate-400 italic">Tidak ada order aktif</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
-
-const HistoryPage = ({ accounts, history }) => {
-    const accountSummary = useMemo(() => {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-        return accounts.map(account => {
-            const weeklyTrades = history.filter(trade =>
-                trade.accountName === account.accountName && new Date(trade.closeDate) > oneWeekAgo
-            );
-
-            const totalPL = weeklyTrades.reduce((sum, trade) => sum + trade.pl, 0);
-            const totalOrders = weeklyTrades.length;
-            const status = account.status === 'active' ? 'Floating' : 'Clear';
-            const entryPrice = account.status === 'active' ? account.entryPrice : 0;
-
-            return {
-                id: account.id,
-                name: account.accountName,
-                totalOrders,
-                totalPL,
-                status,
-                entryPrice,
-            };
-        }).sort((a,b) => a.name.localeCompare(b.name));
-    }, [accounts, history]);
-
-    return (
-        <div className="animate-fade-in">
-            <h2 className="text-2xl font-bold text-white mb-4">Ringkasan Kinerja Akun (1 Minggu Terakhir)</h2>
-            <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-x-auto">
-                <table className="w-full text-sm text-left text-slate-300">
-                    <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
-                        <tr>
-                            <th scope="col" className="px-6 py-3">Nama Akun</th>
-                            <th scope="col" className="px-6 py-3 text-center">Total Order</th>
-                            <th scope="col" className="px-6 py-3 text-right">Total Profit/Loss</th>
-                            <th scope="col" className="px-6 py-3 text-center">Status Saat Ini</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {accountSummary.map(summary => (
-                            <tr key={summary.id} className="border-b border-slate-700 hover:bg-slate-700/50">
-                                <td className="px-6 py-4 font-medium text-white">{summary.name}</td>
-                                <td className="px-6 py-4 text-center">{summary.totalOrders}</td>
-                                <td className={`px-6 py-4 font-semibold text-right ${summary.totalPL > 0 ? 'text-green-500' : summary.totalPL < 0 ? 'text-red-500' : 'text-slate-300'}`}>
-                                    {formatCurrency(summary.totalPL)}
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${summary.status === 'Floating' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-green-500/20 text-green-400'}`}>
-                                        {summary.status === 'Floating' ? <Activity className="mr-2" size={14} /> : <Check className="mr-2" size={14} />}
-                                        {summary.status === 'Floating' ? `Floating @${summary.entryPrice.toFixed(3)}` : 'Clear'}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
-
 
 // Main App Component
 export default function App() {
@@ -280,7 +205,6 @@ export default function App() {
         }
       } catch (error) {
         console.error("Gagal mengambil data dari server:", error);
-        addNotification('Error', 'Gagal mengambil data dari server.', 'take_profit_loss');
       }
     };
 
@@ -292,27 +216,16 @@ export default function App() {
   const handleToggleRobot = async (accountId, newStatus) => {
     setAccounts(prevAccounts =>
       prevAccounts.map(account =>
-        account.accountId === accountId
-          ? { ...account, robotStatus: newStatus }
-          : account
+        account.accountId === accountId ? { ...account, robotStatus: newStatus } : account
       )
     );
-
     try {
         await fetch('/api/robot-toggle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accountId: accountId, newStatus: newStatus })
+            body: JSON.stringify({ accountId, newStatus })
         });
     } catch (error) {
-        console.error("Gagal mengirim perintah ke server:", error);
-        setAccounts(prevAccounts =>
-          prevAccounts.map(account =>
-            account.accountId === accountId
-              ? { ...account, robotStatus: newStatus === 'on' ? 'off' : 'on' }
-              : account
-          )
-        );
         addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
     }
   };
@@ -340,7 +253,6 @@ export default function App() {
         });
         addNotification('Sukses', `Akun ${accountName} telah dihapus.`, 'take_profit_profit');
     } catch (error) {
-        console.error("Gagal menghapus akun:", error);
         addNotification('Error', 'Gagal menghapus akun. Mohon refresh halaman.', 'take_profit_loss');
     }
   };
@@ -408,7 +320,7 @@ export default function App() {
               </div>
               
               <SummaryDashboard accounts={accounts} />
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                   {filteredAccounts.map((account, index) => (
                       <AccountCard
                           key={account.id}
