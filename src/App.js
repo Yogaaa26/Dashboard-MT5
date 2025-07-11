@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2 } from 'lucide-react';
 
 // Helper function to format currency
 const formatCurrency = (value, includeSign = true) => {
@@ -18,6 +18,27 @@ const calculatePL = (account) => {
 };
 
 // --- React Components ---
+
+const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 animate-fade-in">
+            <div className="bg-slate-800 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl border border-slate-700">
+                <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
+                <p className="text-sm text-slate-300 mb-6">{message}</p>
+                <div className="flex justify-end space-x-4">
+                    <button onClick={onCancel} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                        Batal
+                    </button>
+                    <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                        Hapus
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const Notification = ({ notification, onClose }) => {
   useEffect(() => {
@@ -83,7 +104,7 @@ const SummaryDashboard = ({ accounts }) => {
   );
 };
 
-const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
+const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
   const profitLoss = useMemo(() => calculatePL(account), [account]);
   const isProfitable = profitLoss > 0;
   const isPending = account.executionType.includes('limit') || account.executionType.includes('stop');
@@ -126,6 +147,16 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
                 className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'
                   } transition-colors`}
               />
+            </button>
+             <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(account.accountId, account.accountName);
+                }}
+                title="Hapus Akun"
+                className="p-1 rounded-full text-slate-500 hover:bg-slate-700 hover:text-red-500 transition-colors"
+            >
+                <Trash2 size={18} />
             </button>
           </div>
           {getExecutionTypePill()}
@@ -225,6 +256,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [history] = useState([]);
   const [page, setPage] = useState('dashboard');
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, accountId: null, accountName: '' });
 
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -282,6 +314,34 @@ export default function App() {
           )
         );
         addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
+    }
+  };
+
+  const openDeleteModal = (accountId, accountName) => {
+    setDeleteModal({ isOpen: true, accountId, accountName });
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({ isOpen: false, accountId: null, accountName: '' });
+  };
+
+  const handleDeleteAccount = async () => {
+    const { accountId, accountName } = deleteModal;
+    if (!accountId) return;
+
+    setAccounts(prev => prev.filter(acc => acc.accountId !== accountId));
+    closeDeleteModal();
+
+    try {
+        await fetch('/api/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId })
+        });
+        addNotification('Sukses', `Akun ${accountName} telah dihapus.`, 'take_profit_profit');
+    } catch (error) {
+        console.error("Gagal menghapus akun:", error);
+        addNotification('Error', 'Gagal menghapus akun. Mohon refresh halaman.', 'take_profit_loss');
     }
   };
 
@@ -354,6 +414,7 @@ export default function App() {
                           key={account.id}
                           account={account}
                           onToggleRobot={handleToggleRobot}
+                          onDelete={openDeleteModal}
                           index={accounts.findIndex(a => a.id === account.id)}
                           handleDragStart={handleDragStart}
                           handleDragEnter={handleDragEnter}
@@ -369,6 +430,13 @@ export default function App() {
         </main>
       </div>
       <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
+      <ConfirmationModal
+        isOpen={deleteModal.isOpen}
+        title="Konfirmasi Penghapusan"
+        message={`Apakah Anda yakin ingin menghapus akun "${deleteModal.accountName}"? Tindakan ini akan menghapus data dari dasbor. Anda juga harus mematikan EA di akun ini agar tidak muncul kembali.`}
+        onConfirm={handleDeleteAccount}
+        onCancel={closeDeleteModal}
+      />
     </div>
   );
 }

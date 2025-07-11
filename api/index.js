@@ -1,5 +1,5 @@
 // /api/index.js
-// Revisi dengan penyimpanan berdasarkan accountId
+// Revisi dengan endpoint untuk menghapus akun
 
 const express = require('express');
 const cors = require('cors');
@@ -34,8 +34,6 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
             return res.status(400).send({ error: 'accountId dibutuhkan dari EA' });
         }
         
-        // PERUBAHAN KUNCI: Gunakan accountId sebagai key di Firebase
-        // Ini akan selalu menimpa data untuk akun yang sama, bukan membuat baru.
         await set(ref(db, `accounts/${accountId}`), data);
         console.log(`Update BERHASIL untuk Akun: ${accountId}`);
 
@@ -54,7 +52,7 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     }
 });
 
-// Rute untuk frontend mengambil data (tidak perlu diubah)
+// Rute untuk frontend mengambil data
 app.get('/api/accounts', async (req, res) => {
     try {
         const accountsRef = ref(db, 'accounts');
@@ -65,7 +63,7 @@ app.get('/api/accounts', async (req, res) => {
     }
 });
 
-// Rute untuk menerima perintah toggle robot (tidak perlu diubah)
+// Rute untuk menerima perintah toggle robot
 app.post('/api/robot-toggle', express.json(), async (req, res) => {
     const { accountId, newStatus } = req.body;
     if (!accountId || !newStatus) {
@@ -79,5 +77,27 @@ app.post('/api/robot-toggle', express.json(), async (req, res) => {
         res.status(500).send({ error: "Gagal menyimpan perintah." });
     }
 });
+
+// ENDPOINT BARU: Untuk menghapus akun
+app.post('/api/delete-account', express.json(), async (req, res) => {
+    const { accountId } = req.body;
+    if (!accountId) {
+        return res.status(400).send({ error: 'accountId dibutuhkan' });
+    }
+
+    try {
+        // Hapus data akun utama
+        await remove(ref(db, `accounts/${accountId}`));
+        // Hapus juga perintah yang mungkin menunggu
+        await remove(ref(db, `commands/${accountId}`));
+        
+        console.log(`Akun ${accountId} telah dihapus dari Firebase.`);
+        res.status(200).json({ message: 'Akun berhasil dihapus' });
+    } catch (error) {
+        console.error(`Gagal menghapus akun ${accountId}:`, error);
+        res.status(500).send({ error: 'Gagal menghapus akun dari server.' });
+    }
+});
+
 
 module.exports = app;
