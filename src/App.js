@@ -126,9 +126,10 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   }
 
   return (
-    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
+    // PERUBAHAN: Menetapkan tinggi kartu yang tetap dan layout flex kolom
+    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab h-96 ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
-      <div className={`p-4 border-l-4 ${getBorderColor()} flex-grow`}>
+      <div className={`p-4 border-l-4 ${getBorderColor()} flex flex-col flex-grow`}>
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1">
             <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
@@ -144,7 +145,8 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           </div>
         </div>
         
-        <div className="space-y-3 text-xs">
+        {/* PERUBAHAN: Membuat area ini bisa di-scroll jika kontennya banyak */}
+        <div className="flex-1 space-y-3 text-xs overflow-y-auto min-h-0 pr-2">
           {/* Daftar Posisi Aktif */}
           {(account.positions && account.positions.length > 0) && account.positions.map(pos => (
             <div key={pos.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
@@ -165,7 +167,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           ))}
           {/* Pesan jika tidak ada aktivitas */}
           {account.status === 'inactive' && (
-            <div className="flex items-center justify-center h-full bg-slate-800/50 rounded-md p-4">
+            <div className="flex items-center justify-center h-full">
                 <p className="text-slate-400 italic">Tidak ada order aktif</p>
             </div>
           )}
