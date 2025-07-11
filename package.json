@@ -11,10 +11,14 @@
     "react-dom": "^18.3.1",
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4",
-
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "firebase": "^10.12.2"
+  },
+  "overrides": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "semver": "7.5.4"
   },
   "scripts": {
     "start": "react-scripts start",
