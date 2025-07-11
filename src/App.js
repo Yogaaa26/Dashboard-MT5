@@ -126,11 +126,11 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   }
 
   return (
-    // PERUBAHAN: Tinggi kartu diubah dari h-96 menjadi h-72 agar lebih pendek
-    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab h-72 ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
+    // PERUBAHAN: Tinggi kartu diubah menjadi h-56 (lebih pendek)
+    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab h-56 ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
-      <div className={`p-4 border-l-4 ${getBorderColor()} flex flex-col flex-grow`}>
-        <div className="flex justify-between items-start mb-4">
+      <div className={`p-4 border-l-4 ${getBorderColor()} flex flex-col flex-grow min-h-0`}>
+        <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
             <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
             <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>
@@ -145,7 +145,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           </div>
         </div>
         
-        <div className="flex-1 space-y-3 text-xs overflow-y-auto min-h-0 pr-2">
+        <div className="flex-1 space-y-2 text-xs overflow-y-auto min-h-0 pr-1 custom-scrollbar">
           {/* Daftar Posisi Aktif */}
           {(account.positions && account.positions.length > 0) && account.positions.map(pos => (
             <div key={pos.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
@@ -353,6 +353,22 @@ export default function App() {
 
   return (
     <div className="bg-slate-900 min-h-screen text-white font-sans p-4 sm:p-6 lg:p-8">
+      {/* PERUBAHAN: Menambahkan style kustom untuk scrollbar */}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #475569; /* slate-600 */
+          border-radius: 20px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: #64748b; /* slate-500 */
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto">
         <header className="mb-8 flex justify-between items-center">
           <div>
