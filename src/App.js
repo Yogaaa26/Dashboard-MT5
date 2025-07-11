@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power } from 'lucide-react';
 
-// --- KONFIGURASI PENTING ---
-// Ganti alamat URL ini dengan alamat server backend Anda dari Glitch nanti
-const API_URL = "https://nama-proyek-anda.glitch.me"; 
+const LOCAL_STORAGE_KEY = 'accountOrder';
 
 // Helper function to format currency
 const formatCurrency = (value, includeSign = true) => {
@@ -12,54 +10,14 @@ const formatCurrency = (value, includeSign = true) => {
   return `${sign}$${absValue.toFixed(2)}`;
 };
 
-// --- Shared Logic ---
+// Shared Logic
 const calculatePL = (account) => {
-    const isPending = account.executionType.includes('limit') || account.executionType.includes('stop');
-    if (account.status !== 'active' || isPending) {
-        return 0;
-    }
-    const priceDiff = account.currentPrice - account.entryPrice;
-    const multiplier = account.pair.includes('JPY') ? 100 : 100000;
-    if (account.executionType === 'buy') {
-        return priceDiff * account.lotSize * multiplier;
-    } else if (account.executionType === 'sell') {
-        return -priceDiff * account.lotSize * multiplier;
-    }
+  const isPending = account.executionType.includes('limit') || account.executionType.includes('stop');
+  if (account.status !== 'active' || isPending) {
     return 0;
-};
-
-// Helper function to generate random mock data for accounts
-const generateMockData = (count) => {
-  const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'XAU/USD', 'BTC/USD'];
-  const types = ['buy', 'sell', 'buy_limit', 'sell_limit', 'buy_stop', 'sell_stop'];
-  const accounts = [];
-  for (let i = 1; i <= count; i++) {
-    const isActive = Math.random() > 0.3; 
-    const basePrice = 1 + Math.random() * 0.2; 
-    accounts.push({
-      id: i,
-      accountName: `Akun ${String(i).padStart(3, '0')}`,
-      pair: pairs[Math.floor(Math.random() * pairs.length)],
-      lotSize: parseFloat((Math.random() * 1.5 + 0.01).toFixed(2)),
-      executionType: isActive ? types[Math.floor(Math.random() * types.length)] : 'none',
-      entryPrice: isActive ? parseFloat(basePrice.toFixed(5)) : 0,
-      currentPrice: isActive ? parseFloat((basePrice + (Math.random() - 0.5) * 0.01).toFixed(5)) : 0,
-      status: isActive ? 'active' : 'inactive',
-      robotStatus: Math.random() > 0.5 ? 'on' : 'off',
-    });
   }
-  return accounts;
+  return parseFloat(account.profit) || 0;
 };
-
-// Helper function to generate mock history data for demonstration
-const generateMockHistory = () => {
-    const mockHistory = [];
-    let today = new Date();
-    mockHistory.push({ id: 1001, accountName: 'Akun 015', pair: 'XAU/USD', lotSize: 0.50, executionType: 'buy', pl: 250.75, closeDate: new Date(new Date().setDate(today.getDate() - 1)).toISOString() });
-    mockHistory.push({ id: 1002, accountName: 'Akun 042', pair: 'EUR/USD', lotSize: 1.20, executionType: 'sell', pl: -120.40, closeDate: new Date(new Date().setDate(today.getDate() - 2)).toISOString() });
-    return mockHistory;
-};
-
 
 // --- React Components ---
 
@@ -99,7 +57,7 @@ const SummaryStat = ({ icon, title, value, colorClass = 'text-white' }) => (
     <div className="bg-slate-900 p-3 rounded-full">{icon}</div>
     <div>
       <p className="text-sm text-slate-400">{title}</p>
-      <p className={`text-2xl font-bold ${colorClass}`}>{value}</p>
+      <p className={`text-lg font-bold ${colorClass}`}>{value}</p>
     </div>
   </div>
 );
@@ -122,7 +80,7 @@ const SummaryDashboard = ({ accounts }) => {
       <SummaryStat icon={<TrendingUp size={24} className="text-green-400" />} title="Floating Profit" value={summary.profitableAccounts} colorClass="text-green-500" />
       <SummaryStat icon={<TrendingDown size={24} className="text-red-400" />} title="Floating Minus" value={summary.losingAccounts} colorClass="text-red-500" />
       <SummaryStat icon={<Clock size={24} className="text-yellow-400" />} title="Order Pending" value={summary.pendingOrdersCount} colorClass="text-yellow-500" />
-      <SummaryStat icon={<DollarSign size={24} className={summary.totalPL >= 0 ? 'text-green-400' : 'text-red-400'} />} title="Total Profit/Loss" value={formatCurrency(summary.totalPL, false)} colorClass={summary.totalPL >= 0 ? 'text-green-500' : 'text-red-500'} />
+      <SummaryStat icon={<DollarSign size={24} className={summary.totalPL >= 0 ? 'text-green-400' : 'text-red-400'} />} title="Total P/L" value={formatCurrency(summary.totalPL, false)} colorClass={summary.totalPL >= 0 ? 'text-green-500' : 'text-red-500'} />
     </div>
   );
 };
@@ -135,9 +93,9 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
   const getExecutionTypePill = () => {
     const type = account.executionType;
     let bgColor = 'bg-gray-500', textColor = 'text-white';
-    if (type === 'buy_stop' || type === 'buy_limit') { bgColor = 'bg-white'; textColor = 'text-black'; } 
-    else if (type === 'sell_stop' || type === 'sell_limit') { bgColor = 'bg-yellow-600'; } 
-    else if (type === 'buy') { bgColor = 'bg-blue-600'; } 
+    if (type === 'buy_stop' || type === 'buy_limit') { bgColor = 'bg-white'; textColor = 'text-black'; }
+    else if (type === 'sell_stop' || type === 'sell_limit') { bgColor = 'bg-yellow-600'; }
+    else if (type === 'buy') { bgColor = 'bg-blue-600'; }
     else if (type === 'sell') { bgColor = 'bg-red-600'; }
     return <span className={`px-3 py-1 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
   };
@@ -147,27 +105,26 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
     if (isPending) return 'border-yellow-500';
     return isProfitable ? 'border-green-500' : 'border-red-500';
   };
-  
+
   return (
-    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab ${isDragging ? 'opacity-50' : 'opacity-100'}`}
+    <div className={`bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden flex flex-col transition-all duration-300 cursor-grab ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
       <div className={`p-4 border-l-4 ${getBorderColor()} flex-grow`}>
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center space-x-2">
             <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
-            <button 
+            <button
               onClick={(e) => {
-                e.stopPropagation(); // Prevent drag from starting when clicking the button
+                e.stopPropagation();
                 onToggleRobot(account.id, account.robotStatus === 'on' ? 'off' : 'on');
               }}
               title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`}
               className="p-1 rounded-full hover:bg-slate-700 transition-colors"
             >
-              <Power 
-                size={18} 
-                className={`${
-                  account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'
-                } transition-colors`}
+              <Power
+                size={18}
+                className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'
+                  } transition-colors`}
               />
             </button>
           </div>
@@ -179,7 +136,7 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
           {account.status === 'active' && (
             <div className="text-slate-300 col-span-2 md:col-span-1 md:row-span-2 md:self-center md:text-right">
               {isPending ? (
-                <><p className="text-slate-500 text-xs">Status</p><p className="text-xl font-bold text-yellow-500 flex items-center justify-end"><Clock size={18} className="mr-2"/> Pending</p></>
+                <><p className="text-slate-500 text-xs">Status</p><p className="text-xl font-bold text-yellow-500 flex items-center justify-end"><Clock size={18} className="mr-2" /> Pending</p></>
               ) : (
                 <><p className="text-slate-500 text-xs">Profit/Loss</p><p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(profitLoss)}</p></>
               )}
@@ -187,10 +144,10 @@ const AccountCard = ({ account, onToggleRobot, handleDragStart, handleDragEnter,
           )}
           {account.status === 'active' ? (
             <>
-              <div className="text-slate-300"><p className="text-slate-500 text-xs">{isPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold">{account.entryPrice.toFixed(5)}</p></div>
-              <div className="text-slate-300"><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold">{account.currentPrice.toFixed(5)}</p></div>
+              <div className="text-slate-300"><p className="text-slate-500 text-xs">{isPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold">{account.entryPrice.toFixed(3)}</p></div>
+              <div className="text-slate-300"><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold">{account.currentPrice.toFixed(3)}</p></div>
             </>
-          ) : ( <div className="col-span-2 md:col-span-3 flex items-center justify-center h-full bg-slate-800/50 rounded-md p-4 my-2"><p className="text-slate-400 italic">Tidak ada order aktif</p></div> )}
+          ) : (<div className="col-span-2 md:col-span-3 flex items-center justify-center h-full bg-slate-800/50 rounded-md p-4 my-2"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>)}
         </div>
       </div>
     </div>
@@ -207,8 +164,17 @@ const DashboardView = ({ accounts, searchTerm, onToggleRobot, handleDragStart, h
         <>
             <SummaryDashboard accounts={accounts} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {filteredAccounts.map((account) => (
-                    <AccountCard key={account.id} account={account} onToggleRobot={onToggleRobot} index={accounts.findIndex(a => a.id === account.id)} handleDragStart={handleDragStart} handleDragEnter={handleDragEnter} handleDragEnd={handleDragEnd} isDragging={dragging && dragItem.current === accounts.findIndex(a => a.id === account.id)} />
+                {filteredAccounts.map((account, index) => (
+                    <AccountCard
+                        key={account.id}
+                        account={account}
+                        onToggleRobot={onToggleRobot}
+                        index={accounts.findIndex(a => a.id === account.id)}
+                        handleDragStart={handleDragStart}
+                        handleDragEnter={handleDragEnter}
+                        handleDragEnd={handleDragEnd}
+                        isDragging={dragging && dragItem.current === accounts.findIndex(a => a.id === account.id)}
+                    />
                 ))}
             </div>
         </>
@@ -221,7 +187,7 @@ const HistoryPage = ({ accounts, history }) => {
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
         return accounts.map(account => {
-            const weeklyTrades = history.filter(trade => 
+            const weeklyTrades = history.filter(trade =>
                 trade.accountName === account.accountName && new Date(trade.closeDate) > oneWeekAgo
             );
 
@@ -265,7 +231,7 @@ const HistoryPage = ({ accounts, history }) => {
                                 <td className="px-6 py-4 text-center">
                                     <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${summary.status === 'Floating' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-green-500/20 text-green-400'}`}>
                                         {summary.status === 'Floating' ? <Activity className="mr-2" size={14} /> : <Check className="mr-2" size={14} />}
-                                        {summary.status === 'Floating' ? `Floating @${summary.entryPrice.toFixed(4)}` : 'Clear'}
+                                        {summary.status === 'Floating' ? `Floating @${summary.entryPrice.toFixed(3)}` : 'Clear'}
                                     </span>
                                 </td>
                             </tr>
@@ -285,7 +251,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [history, setHistory] = useState([]);
   const [page, setPage] = useState('dashboard');
-  
+
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -295,61 +261,64 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
-  // Mengambil data dari server
+  // Mengambil data dari server dan menerapkan urutan yang disimpan
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/accounts`);
+        const response = await fetch('/api/accounts');
         const data = await response.json();
-        // Di sini kita akan menggabungkan data dari server dengan data lokal
-        // Untuk simulasi, kita masih gunakan data lokal
-        if (data && data.length > 0) {
-            setAccounts(data); // Gunakan data dari server jika ada
-        } else {
-            // Jika server tidak mengembalikan data, gunakan simulasi
-            if (accounts.length === 0) {
-                setAccounts(generateMockData(100));
-                setHistory(generateMockHistory());
+
+        if (data && typeof data === 'object') {
+            let serverAccounts = Object.values(data);
+
+            const savedOrderJSON = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedOrderJSON) {
+                const savedOrder = JSON.parse(savedOrderJSON);
+                const accountMap = new Map(serverAccounts.map(acc => [acc.id, acc]));
+
+                const sortedAccounts = savedOrder
+                    .map(id => accountMap.get(id))
+                    .filter(Boolean);
+
+                const newAccounts = serverAccounts.filter(acc => !savedOrder.includes(acc.id));
+
+                setAccounts([...sortedAccounts, ...newAccounts]);
+            } else {
+                setAccounts(serverAccounts);
             }
         }
       } catch (error) {
         console.error("Gagal mengambil data dari server:", error);
-        // Jika gagal, kita gunakan data simulasi
-        if (accounts.length === 0) {
-            setAccounts(generateMockData(100));
-            setHistory(generateMockHistory());
-        }
+        addNotification('Error', 'Gagal mengambil data dari server.', 'take_profit_loss');
       }
     };
-    
-    fetchData(); // Panggil sekali saat komponen dimuat
 
-    const interval = setInterval(fetchData, 5000); // Ambil data setiap 5 detik
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
-  }, []); // Dependency array kosong agar hanya berjalan sekali saat mount
+  }, []);
 
   const handleToggleRobot = async (accountId, newStatus) => {
-    // Optimistic UI update
-    setAccounts(prevAccounts => 
-      prevAccounts.map(account => 
-        account.id === accountId 
+    setAccounts(prevAccounts =>
+      prevAccounts.map(account =>
+        account.id === accountId
           ? { ...account, robotStatus: newStatus }
           : account
       )
     );
-    
+
     try {
-        await fetch(`${API_URL}/api/robot-toggle`, {
+        await fetch('/api/robot-toggle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accountId: accountId, newStatus: newStatus })
         });
     } catch (error) {
         console.error("Gagal mengirim perintah ke server:", error);
-        // Rollback UI jika gagal
-        setAccounts(prevAccounts => 
-          prevAccounts.map(account => 
-            account.id === accountId 
+        setAccounts(prevAccounts =>
+          prevAccounts.map(account =>
+            account.id === accountId
               ? { ...account, robotStatus: newStatus === 'on' ? 'off' : 'on' }
               : account
           )
@@ -358,16 +327,36 @@ export default function App() {
     }
   };
 
-  const handleDragStart = (e, pos) => { dragItem.current = pos; setDragging(true); };
-  const handleDragEnter = (e, pos) => { dragOverItem.current = pos; };
+  const handleDragStart = (e, pos) => {
+    dragItem.current = pos;
+    setDragging(true);
+  };
+
+  const handleDragEnter = (e, pos) => {
+    dragOverItem.current = pos;
+  };
+
   const handleDragEnd = () => {
-    if (dragOverItem.current === null) { setDragging(false); return; }
+    if (dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+      setDragging(false);
+      dragItem.current = null;
+      dragOverItem.current = null;
+      return;
+    }
+
     const accountsCopy = [...accounts];
     const dragItemContent = accountsCopy[dragItem.current];
     accountsCopy.splice(dragItem.current, 1);
     accountsCopy.splice(dragOverItem.current, 0, dragItemContent);
-    dragItem.current = null; dragOverItem.current = null;
-    setAccounts(accountsCopy); setDragging(false);
+
+    const newOrder = accountsCopy.map(acc => acc.id);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newOrder));
+
+    setAccounts(accountsCopy);
+
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragging(false);
   };
 
   return (
@@ -398,7 +387,16 @@ export default function App() {
                 <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               </div>
-              <DashboardView accounts={accounts} searchTerm={searchTerm} onToggleRobot={handleToggleRobot} handleDragStart={handleDragStart} handleDragEnter={handleDragEnter} handleDragEnd={handleDragEnd} dragging={dragging} dragItem={dragItem} />
+              <DashboardView
+                accounts={accounts}
+                searchTerm={searchTerm}
+                onToggleRobot={handleToggleRobot}
+                handleDragStart={handleDragStart}
+                handleDragEnter={handleDragEnter}
+                handleDragEnd={handleDragEnd}
+                dragging={dragging}
+                dragItem={dragItem}
+              />
             </>
           ) : (
             <HistoryPage accounts={accounts} history={history} />
