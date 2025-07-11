@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power } from 'lucide-react';
 
-// PERUBAHAN: Variabel yang tidak terpakai dihapus
-// const LOCAL_STORAGE_KEY = 'accountOrder';
-
 // Helper function to format currency
 const formatCurrency = (value, includeSign = true) => {
   const absValue = Math.abs(value);
@@ -187,4 +184,191 @@ const HistoryPage = ({ accounts, history }) => {
     return (
         <div className="animate-fade-in">
             <h2 className="text-2xl font-bold text-white mb-4">Ringkasan Kinerja Akun (1 Minggu Terakhir)</h2>
-            <div className="bg-slate-800 rounded-lg border bor
+            <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-x-auto">
+                <table className="w-full text-sm text-left text-slate-300">
+                    <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                        <tr>
+                            <th scope="col" className="px-6 py-3">Nama Akun</th>
+                            <th scope="col" className="px-6 py-3 text-center">Total Order</th>
+                            <th scope="col" className="px-6 py-3 text-right">Total Profit/Loss</th>
+                            <th scope="col" className="px-6 py-3 text-center">Status Saat Ini</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {accountSummary.map(summary => (
+                            <tr key={summary.id} className="border-b border-slate-700 hover:bg-slate-700/50">
+                                <td className="px-6 py-4 font-medium text-white">{summary.name}</td>
+                                <td className="px-6 py-4 text-center">{summary.totalOrders}</td>
+                                <td className={`px-6 py-4 font-semibold text-right ${summary.totalPL > 0 ? 'text-green-500' : summary.totalPL < 0 ? 'text-red-500' : 'text-slate-300'}`}>
+                                    {formatCurrency(summary.totalPL)}
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                    <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${summary.status === 'Floating' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-green-500/20 text-green-400'}`}>
+                                        {summary.status === 'Floating' ? <Activity className="mr-2" size={14} /> : <Check className="mr-2" size={14} />}
+                                        {summary.status === 'Floating' ? `Floating @${summary.entryPrice.toFixed(3)}` : 'Clear'}
+                                    </span>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+
+// Main App Component
+export default function App() {
+  const [accounts, setAccounts] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [notifications, setNotifications] = useState([]);
+  const [history] = useState([]);
+  const [page, setPage] = useState('dashboard');
+
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  const addNotification = (title, message, type) => {
+    setNotifications(prev => [{ id: Date.now(), title, message, type }, ...prev].slice(0, 5));
+  };
+  const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/api/accounts');
+        const data = await response.json();
+
+        if (data && typeof data === 'object') {
+            let serverAccounts = Object.values(data);
+            serverAccounts.sort((a, b) => a.accountName.localeCompare(b.accountName));
+            setAccounts(serverAccounts);
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data dari server:", error);
+        addNotification('Error', 'Gagal mengambil data dari server.', 'take_profit_loss');
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggleRobot = async (accountId, newStatus) => {
+    setAccounts(prevAccounts =>
+      prevAccounts.map(account =>
+        account.accountId === accountId
+          ? { ...account, robotStatus: newStatus }
+          : account
+      )
+    );
+
+    try {
+        await fetch('/api/robot-toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId: accountId, newStatus: newStatus })
+        });
+    } catch (error) {
+        console.error("Gagal mengirim perintah ke server:", error);
+        setAccounts(prevAccounts =>
+          prevAccounts.map(account =>
+            account.accountId === accountId
+              ? { ...account, robotStatus: newStatus === 'on' ? 'off' : 'on' }
+              : account
+          )
+        );
+        addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
+    }
+  };
+
+  const handleDragStart = (e, pos) => {
+    dragItem.current = pos;
+    setDragging(true);
+  };
+
+  const handleDragEnter = (e, pos) => {
+    dragOverItem.current = pos;
+  };
+
+  const handleDragEnd = () => {
+    if (dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+      setDragging(false);
+      dragItem.current = null;
+      dragOverItem.current = null;
+      return;
+    }
+
+    const accountsCopy = [...accounts];
+    const dragItemContent = accountsCopy[dragItem.current];
+    accountsCopy.splice(dragItem.current, 1);
+    accountsCopy.splice(dragOverItem.current, 0, dragItemContent);
+    setAccounts(accountsCopy);
+
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragging(false);
+  };
+
+  const filteredAccounts = useMemo(() => {
+    if (!searchTerm) return accounts;
+    return accounts.filter(account => account.accountName.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [accounts, searchTerm]);
+
+  return (
+    <div className="bg-slate-900 min-h-screen text-white font-sans p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto">
+        <header className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Dashboard MetaTrader</h1>
+            <p className="text-slate-400 mt-1">{page === 'dashboard' ? 'Ringkasan global dan status akun individual.' : 'Riwayat transaksi 1 minggu terakhir.'}</p>
+          </div>
+          {page === 'dashboard' ? (
+            <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors">
+                <History size={20} />
+                <span>Lihat Riwayat</span>
+            </button>
+          ) : (
+            <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors">
+                <ArrowLeft size={20} />
+                <span>Kembali ke Dashboard</span>
+            </button>
+          )}
+        </header>
+
+        <main>
+          {page === 'dashboard' ? (
+            <>
+              <div className="mb-6 relative">
+                <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              </div>
+              
+              <SummaryDashboard accounts={accounts} />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {filteredAccounts.map((account, index) => (
+                      <AccountCard
+                          key={account.id}
+                          account={account}
+                          onToggleRobot={handleToggleRobot}
+                          index={accounts.findIndex(a => a.id === account.id)}
+                          handleDragStart={handleDragStart}
+                          handleDragEnter={handleDragEnter}
+                          handleDragEnd={handleDragEnd}
+                          isDragging={dragging && dragItem.current === accounts.findIndex(a => a.id === account.id)}
+                      />
+                  ))}
+              </div>
+            </>
+          ) : (
+            <HistoryPage accounts={accounts} history={history} />
+          )}
+        </main>
+      </div>
+      <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
+    </div>
+  );
+}
