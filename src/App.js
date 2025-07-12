@@ -202,34 +202,39 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   );
 };
 
-const HistoryPage = ({ accounts, history }) => {
+const HistoryPage = ({ accounts, tradeHistory }) => {
     const accountSummary = useMemo(() => {
+        // Gabungkan semua riwayat dari semua akun menjadi satu array besar
+        const allHistory = Object.values(tradeHistory).flat();
+
         return accounts.map(account => {
-            const weeklyTrades = history.filter(trade => trade.accountName === account.accountName);
-            const totalPL = weeklyTrades.reduce((sum, trade) => sum + trade.pl, 0);
+            // Filter riwayat untuk akun ini
+            const accountTrades = allHistory.filter(trade => 
+                trade.accountName === account.accountName
+            );
+
+            const totalPL = accountTrades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
 
             return {
                 id: account.id,
                 name: account.accountName,
-                totalOrders: weeklyTrades.length,
+                totalOrders: accountTrades.length,
                 totalPL: totalPL,
                 status: account.status,
-                entryPrice: (account.positions && account.positions.length > 0) ? account.positions[0].entryPrice : 0
             };
         }).sort((a,b) => a.name.localeCompare(b.name));
-    }, [accounts, history]);
+    }, [accounts, tradeHistory]);
 
     return (
         <div className="animate-fade-in">
-            <h2 className="text-2xl font-bold text-white mb-4">Riwayat Kinerja Akun</h2>
-            <p className="text-slate-400 mb-6 -mt-4">Fitur ini sedang dalam pengembangan. Data riwayat belum dikirim dari EA.</p>
+            <h2 className="text-2xl font-bold text-white mb-4">Riwayat Kinerja Akun (7 Hari Terakhir)</h2>
             <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700 overflow-x-auto">
                 <table className="w-full text-sm text-left text-slate-300">
                     <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
                         <tr>
                             <th scope="col" className="px-6 py-3">Nama Akun</th>
-                            <th scope="col" className="px-6 py-3 text-center">Total Order (Mingguan)</th>
-                            <th scope="col" className="px-6 py-3 text-right">Total P/L (Mingguan)</th>
+                            <th scope="col" className="px-6 py-3 text-center">Total Transaksi</th>
+                            <th scope="col" className="px-6 py-3 text-right">Total P/L</th>
                             <th scope="col" className="px-6 py-3 text-center">Status Saat Ini</th>
                         </tr>
                     </thead>
@@ -261,9 +266,9 @@ const HistoryPage = ({ accounts, history }) => {
 export default function App() {
   const [accountsData, setAccountsData] = useState({});
   const [accountOrder, setAccountOrder] = useState([]);
+  const [tradeHistory, setTradeHistory] = useState({}); // State baru untuk menyimpan riwayat
   const [searchTerm, setSearchTerm] = useState('');
   const [notifications, setNotifications] = useState([]);
-  const [history] = useState([]);
   const [page, setPage] = useState('dashboard');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, accountId: null, accountName: '' });
 
@@ -276,19 +281,22 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
-  // Efek untuk mengambil data awal (urutan dan akun)
+  // Efek untuk mengambil data awal (urutan, akun, DAN riwayat)
   useEffect(() => {
     const getInitialData = async () => {
         try {
-            const [orderRes, accountsRes] = await Promise.all([
+            const [orderRes, accountsRes, historyRes] = await Promise.all([
                 fetch('/api/get-order'),
-                fetch('/api/accounts')
+                fetch('/api/accounts'),
+                fetch('/api/get-history') // Ambil data riwayat
             ]);
             const orderData = await orderRes.json();
             const accountsData = await accountsRes.json();
+            const historyData = await historyRes.json();
 
             setAccountOrder(orderData || []);
             setAccountsData(accountsData || {});
+            setTradeHistory(historyData || {}); // Simpan data riwayat
 
         } catch (error) {
             console.error("Gagal mengambil data awal:", error);
@@ -478,7 +486,7 @@ export default function App() {
                   </div>
                 </>
             ) : (
-                <HistoryPage accounts={accounts} history={history} />
+                <HistoryPage accounts={accounts} tradeHistory={tradeHistory} />
             )}
         </main>
       </div>
