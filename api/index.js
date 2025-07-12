@@ -1,35 +1,38 @@
 // /api/index.js
-// Versi final dengan penyimpanan urutan kartu
+// Versi final dengan inisialisasi yang lebih aman dan penyimpanan urutan
 
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const app = express();
 
-// --- Inisialisasi Firebase Admin ---
+// --- Inisialisasi Firebase Admin yang Lebih Aman ---
 try {
     // Ambil kunci dari Environment Variable
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-        if (admin.apps.length === 0) { // Cek agar tidak inisialisasi ulang
+        // Cek agar tidak inisialisasi ulang (penting untuk lingkungan serverless)
+        if (admin.apps.length === 0) { 
             admin.initializeApp({
               credential: admin.credential.cert(serviceAccount),
               databaseURL: process.env.FIREBASE_DATABASE_URL 
             });
+            console.log("Firebase Admin SDK berhasil diinisialisasi.");
         }
+    } else {
+        console.log("FIREBASE_SERVICE_ACCOUNT tidak ditemukan di Environment Variables.");
     }
 } catch (e) {
-    console.error('Firebase Admin Initialization Error:', e);
+    console.error('Firebase Admin Initialization Error:', e.message);
 }
-
 
 const db = admin.database();
 
 app.use(cors());
-app.use(express.json()); // Middleware untuk parsing JSON body
+app.use(express.json());
 
-// Middleware keamanan (jika Anda sudah menerapkannya)
+// Middleware keamanan (opsional, jika Anda sudah menerapkannya)
 const requireApiKey = (req, res, next) => {
   const apiKey = req.get('x-secret-key');
   if (process.env.API_SECRET_KEY && (!apiKey || apiKey !== process.env.API_SECRET_KEY)) {
@@ -89,7 +92,6 @@ app.post('/api/delete-account', async (req, res) => {
 
 // --- ENDPOINT BARU UNTUK DRAG & DROP ---
 
-// Endpoint untuk menyimpan urutan kartu
 app.post('/api/save-order', async (req, res) => {
     const { order } = req.body;
     if (!order || !Array.isArray(order)) {
@@ -106,12 +108,11 @@ app.post('/api/save-order', async (req, res) => {
     }
 });
 
-// Endpoint untuk mengambil urutan kartu
 app.get('/api/get-order', async (req, res) => {
     try {
         const orderRef = db.ref('dashboard_config/accountOrder');
         const snapshot = await orderRef.once('value');
-        res.json(snapshot.val() || []); // Kirim array kosong jika tidak ada
+        res.json(snapshot.val() || []);
     } catch (error) {
         console.error('Gagal mengambil urutan:', error);
         res.status(500).send({ error: 'Gagal mengambil urutan dari server.' });
