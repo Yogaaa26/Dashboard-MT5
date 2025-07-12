@@ -1,121 +1,101 @@
 // /api/index.js
-// Versi final dengan inisialisasi yang lebih aman dan penyimpanan urutan
+// Revisi dengan endpoint untuk menghapus akun
 
 const express = require('express');
 const cors = require('cors');
-const admin = require('firebase-admin');
+const { initializeApp } = require('firebase/app');
+const { getDatabase, ref, set, get, remove } = require("firebase/database");
 const app = express();
 
-// --- Inisialisasi Firebase Admin yang Lebih Aman ---
-try {
-    // Ambil kunci dari Environment Variable
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-
-        // Cek agar tidak inisialisasi ulang (penting untuk lingkungan serverless)
-        if (admin.apps.length === 0) { 
-            admin.initializeApp({
-              credential: admin.credential.cert(serviceAccount),
-              databaseURL: process.env.FIREBASE_DATABASE_URL 
-            });
-            console.log("Firebase Admin SDK berhasil diinisialisasi.");
-        }
-    } else {
-        console.log("FIREBASE_SERVICE_ACCOUNT tidak ditemukan di Environment Variables.");
-    }
-} catch (e) {
-    console.error('Firebase Admin Initialization Error:', e.message);
-}
-
-const db = admin.database();
-
-app.use(cors());
-app.use(express.json());
-
-// Middleware keamanan (opsional, jika Anda sudah menerapkannya)
-const requireApiKey = (req, res, next) => {
-  const apiKey = req.get('x-secret-key');
-  if (process.env.API_SECRET_KEY && (!apiKey || apiKey !== process.env.API_SECRET_KEY)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  next();
+// Konfigurasi Firebase diambil dari Environment Variables Vercel
+const firebaseConfig = {
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.FIREBASE_DATABASE_URL,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID
 };
 
-// --- Endpoint yang Sudah Ada ---
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getDatabase(firebaseApp);
 
-app.post('/api/update', requireApiKey, express.raw({ type: '*/*' }), async (req, res) => {
+app.use(cors());
+
+// Rute untuk menerima update dari EA
+app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
     try {
         const data = JSON.parse(rawBody);
         const accountId = data.accountId;
-        if (!accountId) return res.status(400).send({ error: 'accountId dibutuhkan' });
-        
-        const accountRef = db.ref(`accounts/${accountId}`);
-        await accountRef.set(data);
 
-        const commandRef = db.ref(`commands/${accountId}`);
-        const snapshot = await commandRef.once('value');
+        if (!accountId) {
+            return res.status(400).send({ error: 'accountId dibutuhkan dari EA' });
+        }
+        
+        await set(ref(db, `accounts/${accountId}`), data);
+        console.log(`Update BERHASIL untuk Akun: ${accountId}`);
+
+        const commandRef = ref(db, `commands/${accountId}`);
+        const snapshot = await get(commandRef);
         if (snapshot.exists()) {
-            res.json(snapshot.val());
-            await commandRef.remove();
+            const command = snapshot.val();
+            res.json(command);
+            await remove(commandRef);
         } else {
             res.json({ status: 'ok', command: 'none' });
         }
     } catch (error) {
-        res.status(400).send({ error: 'Gagal memproses data' });
+        console.error("Gagal mem-parsing atau menyimpan data:", error.message);
+        res.status(400).send({ error: 'Format JSON tidak valid atau gagal menyimpan.' });
     }
 });
 
+// Rute untuk frontend mengambil data
 app.get('/api/accounts', async (req, res) => {
     try {
-        const accountsRef = db.ref('accounts');
-        const snapshot = await accountsRef.once('value');
-        res.json(snapshot.val() || {});
+        const accountsRef = ref(db, 'accounts');
+        const snapshot = await get(accountsRef);
+        res.json(snapshot.exists() ? snapshot.val() : {});
     } catch (error) {
-        res.status(500).send({ error: 'Gagal mengambil data akun.' });
+        res.status(500).send({ error: "Gagal mengambil data akun." });
     }
 });
 
-app.post('/api/robot-toggle', async (req, res) => {
+// Rute untuk menerima perintah toggle robot
+app.post('/api/robot-toggle', express.json(), async (req, res) => {
     const { accountId, newStatus } = req.body;
-    const commandRef = db.ref(`commands/${accountId}`);
-    await commandRef.set({ command: 'toggle_robot', status: newStatus });
-    res.json({ message: 'Perintah dicatat' });
+    if (!accountId || !newStatus) {
+        return res.status(400).send({ error: 'accountId dan newStatus dibutuhkan' });
+    }
+    try {
+        const command = { command: 'toggle_robot', status: newStatus };
+        await set(ref(db, `commands/${accountId}`), command);
+        res.json({ message: `Perintah untuk Akun ${accountId} dicatat.` });
+    } catch (error) {
+        res.status(500).send({ error: "Gagal menyimpan perintah." });
+    }
 });
 
-app.post('/api/delete-account', async (req, res) => {
+// ENDPOINT BARU: Untuk menghapus akun
+app.post('/api/delete-account', express.json(), async (req, res) => {
     const { accountId } = req.body;
-    await db.ref(`accounts/${accountId}`).remove();
-    await db.ref(`commands/${accountId}`).remove();
-    res.status(200).json({ message: 'Akun berhasil dihapus' });
-});
-
-// --- ENDPOINT BARU UNTUK DRAG & DROP ---
-
-app.post('/api/save-order', async (req, res) => {
-    const { order } = req.body;
-    if (!order || !Array.isArray(order)) {
-        return res.status(400).send({ error: 'Data urutan tidak valid' });
+    if (!accountId) {
+        return res.status(400).send({ error: 'accountId dibutuhkan' });
     }
 
     try {
-        const orderRef = db.ref('dashboard_config/accountOrder');
-        await orderRef.set(order);
-        res.status(200).json({ message: 'Urutan berhasil disimpan' });
+        // Hapus data akun utama
+        await remove(ref(db, `accounts/${accountId}`));
+        // Hapus juga perintah yang mungkin menunggu
+        await remove(ref(db, `commands/${accountId}`));
+        
+        console.log(`Akun ${accountId} telah dihapus dari Firebase.`);
+        res.status(200).json({ message: 'Akun berhasil dihapus' });
     } catch (error) {
-        console.error('Gagal menyimpan urutan:', error);
-        res.status(500).send({ error: 'Gagal menyimpan urutan ke server.' });
-    }
-});
-
-app.get('/api/get-order', async (req, res) => {
-    try {
-        const orderRef = db.ref('dashboard_config/accountOrder');
-        const snapshot = await orderRef.once('value');
-        res.json(snapshot.val() || []);
-    } catch (error) {
-        console.error('Gagal mengambil urutan:', error);
-        res.status(500).send({ error: 'Gagal mengambil urutan dari server.' });
+        console.error(`Gagal menghapus akun ${accountId}:`, error);
+        res.status(500).send({ error: 'Gagal menghapus akun dari server.' });
     }
 });
 
