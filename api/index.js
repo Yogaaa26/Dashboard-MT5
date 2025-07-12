@@ -29,9 +29,6 @@ try {
 
 app.use(cors());
 
-// PERBAIKAN: Hapus parser JSON global
-// app.use(express.json()); 
-
 // Middleware untuk memeriksa koneksi DB
 const checkDbConnection = (req, res, next) => {
     if (!db) {
@@ -118,15 +115,19 @@ app.get('/api/get-order', async (req, res) => {
 
 // --- Endpoint untuk Riwayat ---
 
-app.post('/api/log-history', express.json(), async (req, res) => {
-    const { accountId, history } = req.body;
-    if (!accountId || !history || !Array.isArray(history)) {
-        return res.status(400).send({ error: 'Data riwayat tidak valid' });
-    }
+// PERBAIKAN: Gunakan parser RAW untuk endpoint ini juga
+app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
+    const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
     try {
+        const { accountId, history } = JSON.parse(rawBody);
+        if (!accountId || !history || !Array.isArray(history)) {
+            return res.status(400).send({ error: 'Data riwayat tidak valid' });
+        }
+        
         await db.ref(`trade_history/${accountId}`).set(history);
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
     } catch (error) {
+        console.error('Gagal menyimpan riwayat:', error);
         res.status(500).send({ error: 'Gagal menyimpan riwayat ke server.' });
     }
 });
