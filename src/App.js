@@ -204,21 +204,25 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
 
 const HistoryPage = ({ accounts, tradeHistory }) => {
     const accountSummary = useMemo(() => {
-        // Gabungkan semua riwayat dari semua akun menjadi satu array besar
         const allHistory = Object.values(tradeHistory).flat();
 
         return accounts.map(account => {
-            // Filter riwayat untuk akun ini
-            const accountTrades = allHistory.filter(trade => 
-                trade.accountName === account.accountName
-            );
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-            const totalPL = accountTrades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
+            const weeklyTrades = allHistory.filter(trade => {
+                if (trade.accountName !== account.accountName) return false;
+                // PERBAIKAN: Mengubah format tanggal agar bisa dibaca JavaScript
+                const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
+                return tradeDate > oneWeekAgo;
+            });
+
+            const totalPL = weeklyTrades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
 
             return {
                 id: account.id,
                 name: account.accountName,
-                totalOrders: accountTrades.length,
+                totalOrders: weeklyTrades.length,
                 totalPL: totalPL,
                 status: account.status,
             };
@@ -266,7 +270,7 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
 export default function App() {
   const [accountsData, setAccountsData] = useState({});
   const [accountOrder, setAccountOrder] = useState([]);
-  const [tradeHistory, setTradeHistory] = useState({}); // State baru untuk menyimpan riwayat
+  const [tradeHistory, setTradeHistory] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [notifications, setNotifications] = useState([]);
   const [page, setPage] = useState('dashboard');
@@ -281,14 +285,13 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
-  // Efek untuk mengambil data awal (urutan, akun, DAN riwayat)
   useEffect(() => {
     const getInitialData = async () => {
         try {
             const [orderRes, accountsRes, historyRes] = await Promise.all([
                 fetch('/api/get-order'),
                 fetch('/api/accounts'),
-                fetch('/api/get-history') // Ambil data riwayat
+                fetch('/api/get-history')
             ]);
             const orderData = await orderRes.json();
             const accountsData = await accountsRes.json();
@@ -296,7 +299,7 @@ export default function App() {
 
             setAccountOrder(orderData || []);
             setAccountsData(accountsData || {});
-            setTradeHistory(historyData || {}); // Simpan data riwayat
+            setTradeHistory(historyData || {});
 
         } catch (error) {
             console.error("Gagal mengambil data awal:", error);
@@ -306,7 +309,6 @@ export default function App() {
     getInitialData();
   }, []);
 
-  // Efek untuk polling data akun setiap 5 detik
   useEffect(() => {
     const interval = setInterval(async () => {
         try {
@@ -322,7 +324,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Membuat array akun yang sudah terurut untuk ditampilkan
   const accounts = useMemo(() => {
     const accountsArray = Object.values(accountsData);
     if (accountOrder.length === 0) {
