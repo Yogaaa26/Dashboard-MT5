@@ -478,7 +478,7 @@ export default function App() {
                   </div>
                 </>
             ) : (
-                <HistoryPage accounts={accounts} history={history} />
+                <HistoryPage accounts={accounts} history={tradeHistory} />
             )}
         </main>
       </div>
