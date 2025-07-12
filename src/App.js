@@ -119,11 +119,11 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
 
   const getTypePill = (type) => {
     let bgColor = 'bg-gray-500', textColor = 'text-white';
-    if (type === 'buy_stop' || type === 'buy_limit') { bgColor = 'bg-yellow-500/20'; textColor = 'text-yellow-400'; }
-    else if (type === 'sell_stop' || type === 'sell_limit') { bgColor = 'bg-yellow-500/20'; textColor = 'text-yellow-400'; }
-    else if (type === 'buy') { bgColor = 'bg-blue-600/20'; textColor = 'text-blue-400'; }
-    else if (type === 'sell') { bgColor = 'bg-red-600/20'; textColor = 'text-red-400'; }
-    return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
+    if (type === 'buy_stop' || type === 'buy_limit') { bgColor = 'bg-white'; textColor = 'text-black'; }
+    else if (type === 'sell_stop' || type === 'sell_limit') { bgColor = 'bg-yellow-600'; }
+    else if (type === 'buy') { bgColor = 'bg-blue-600'; }
+    else if (type === 'sell') { bgColor = 'bg-red-600'; }
+    return <span className={`px-3 py-1 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
   }
   
   const totalActivities = (account.positions?.length || 0) + (account.orders?.length || 0);
@@ -135,7 +135,6 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
       
       <div className="p-4 flex flex-col flex-grow min-h-0">
-        {/* Header Kartu */}
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-x-2 mb-1">
@@ -151,13 +150,11 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           )}
         </div>
         
-        {/* Konten Kartu (Dinamis) */}
         <div className="flex-1 flex flex-col min-h-0">
           {account.status === 'inactive' && (
             <div className="flex-1 flex items-center justify-center"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>
           )}
 
-          {/* Tampilan untuk SATU aktivitas (seperti di screenshot) */}
           {account.status === 'active' && totalActivities === 1 && singleItem && (
             <div className="grid grid-cols-3 gap-x-4 text-sm flex-1">
                 <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-4">
@@ -176,7 +173,6 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
             </div>
           )}
 
-          {/* Tampilan untuk BANYAK aktivitas (scrollable list) */}
           {account.status === 'active' && totalActivities > 1 && (
             <div className="space-y-2 text-xs overflow-y-auto min-h-0 pr-1 custom-scrollbar">
               {(account.positions || []).map(pos => (
@@ -199,7 +195,6 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
           )}
         </div>
       </div>
-      {/* Tombol Hapus Dipindahkan ke Sini */}
       <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="absolute bottom-3 right-3 p-1 rounded-full text-slate-600 hover:bg-slate-900/50 hover:text-red-500 transition-all duration-200 opacity-50 hover:opacity-100">
         <Trash2 size={16} />
       </button>
@@ -264,7 +259,8 @@ const HistoryPage = ({ accounts, history }) => {
 
 // Main App Component
 export default function App() {
-  const [accounts, setAccounts] = useState([]);
+  const [accountsData, setAccountsData] = useState({});
+  const [accountOrder, setAccountOrder] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [notifications, setNotifications] = useState([]);
   const [history] = useState([]);
@@ -280,33 +276,67 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
+  // Efek untuk mengambil data awal (urutan dan akun)
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/api/accounts');
-        const data = await response.json();
+    const getInitialData = async () => {
+        try {
+            const [orderRes, accountsRes] = await Promise.all([
+                fetch('/api/get-order'),
+                fetch('/api/accounts')
+            ]);
+            const orderData = await orderRes.json();
+            const accountsData = await accountsRes.json();
 
-        if (data && typeof data === 'object') {
-            let serverAccounts = Object.values(data);
-            serverAccounts.sort((a, b) => a.accountName.localeCompare(b.accountName));
-            setAccounts(serverAccounts);
+            setAccountOrder(orderData || []);
+            setAccountsData(accountsData || {});
+
+        } catch (error) {
+            console.error("Gagal mengambil data awal:", error);
+            addNotification('Error', 'Gagal memuat data awal.', 'take_profit_loss');
         }
-      } catch (error) {
-        console.error("Gagal mengambil data dari server:", error);
-      }
     };
+    getInitialData();
+  }, []);
 
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
+  // Efek untuk polling data akun setiap 5 detik
+  useEffect(() => {
+    const interval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/accounts');
+            const data = await response.json();
+            if (data && typeof data === 'object') {
+                setAccountsData(data);
+            }
+        } catch (error) {
+            console.error("Gagal mengambil update data:", error);
+        }
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
+  // Membuat array akun yang sudah terurut untuk ditampilkan
+  const accounts = useMemo(() => {
+    const accountsArray = Object.values(accountsData);
+    if (accountOrder.length === 0) {
+        return accountsArray.sort((a, b) => a.accountName.localeCompare(b.accountName));
+    }
+
+    const accountMap = new Map(accountsArray.map(acc => [String(acc.id), acc]));
+    const ordered = accountOrder
+        .map(id => accountMap.get(String(id)))
+        .filter(Boolean);
+
+    const newAccounts = accountsArray.filter(acc => !accountOrder.includes(acc.id));
+    
+    return [...ordered, ...newAccounts];
+  }, [accountsData, accountOrder]);
+
+
   const handleToggleRobot = async (accountId, newStatus) => {
-    setAccounts(prevAccounts =>
-      prevAccounts.map(account =>
-        account.accountId === accountId ? { ...account, robotStatus: newStatus } : account
-      )
-    );
+    setAccountsData(prev => ({
+        ...prev,
+        [accountId]: { ...prev[accountId], robotStatus: newStatus }
+    }));
     try {
         await fetch('/api/robot-toggle', {
             method: 'POST',
@@ -330,7 +360,11 @@ export default function App() {
     const { accountId, accountName } = deleteModal;
     if (!accountId) return;
 
-    setAccounts(prev => prev.filter(acc => acc.accountId !== accountId));
+    setAccountsData(prev => {
+        const newData = { ...prev };
+        delete newData[accountId];
+        return newData;
+    });
     closeDeleteModal();
 
     try {
@@ -354,7 +388,7 @@ export default function App() {
     dragOverItem.current = pos;
   };
 
-  const handleDragEnd = () => {
+  const handleDragEnd = async () => {
     if (dragOverItem.current === null || dragItem.current === dragOverItem.current) {
       setDragging(false);
       dragItem.current = null;
@@ -362,15 +396,28 @@ export default function App() {
       return;
     }
 
-    const accountsCopy = [...accounts];
-    const dragItemContent = accountsCopy[dragItem.current];
-    accountsCopy.splice(dragItem.current, 1);
-    accountsCopy.splice(dragOverItem.current, 0, dragItemContent);
-    setAccounts(accountsCopy);
+    const reorderedAccounts = [...accounts];
+    const dragItemContent = reorderedAccounts[dragItem.current];
+    reorderedAccounts.splice(dragItem.current, 1);
+    reorderedAccounts.splice(dragOverItem.current, 0, dragItemContent);
+    
+    const newOrderIds = reorderedAccounts.map(acc => acc.id);
+    setAccountOrder(newOrderIds);
 
     dragItem.current = null;
     dragOverItem.current = null;
     setDragging(false);
+
+    try {
+        await fetch('/api/save-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: newOrderIds })
+        });
+        addNotification('Sukses', 'Urutan kartu telah disimpan.', 'take_profit_profit');
+    } catch (error) {
+        addNotification('Error', 'Gagal menyimpan urutan kartu.', 'take_profit_loss');
+    }
   };
 
   const filteredAccounts = useMemo(() => {
@@ -421,11 +468,11 @@ export default function App() {
                               account={account}
                               onToggleRobot={handleToggleRobot}
                               onDelete={openDeleteModal}
-                              index={accounts.findIndex(a => a.id === account.id)}
+                              index={index}
                               handleDragStart={handleDragStart}
                               handleDragEnter={handleDragEnter}
                               handleDragEnd={handleDragEnd}
-                              isDragging={dragging && dragItem.current === accounts.findIndex(a => a.id === account.id)}
+                              isDragging={dragging && dragItem.current === index}
                           />
                       ))}
                   </div>
