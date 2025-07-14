@@ -137,15 +137,13 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
       <div className="p-4 flex flex-col flex-grow min-h-0">
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
-            <div className="flex items-center gap-x-2">
+            <div className="flex items-center gap-x-2 mb-1">
               <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
               <button onClick={(e) => { e.stopPropagation(); onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on'); }} title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`} className="p-1 rounded-full hover:bg-slate-700 transition-colors">
                 <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
               </button>
             </div>
-            {/* PERUBAHAN BARU: Menampilkan nama robot */}
             {account.tradingRobotName && <p className="text-xs text-cyan-400 -mt-1">{account.tradingRobotName}</p>}
-            
             {totalActivities > 1 && <p className={`text-xl font-bold mt-1 ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           {totalActivities === 1 && singleItem && (
@@ -287,6 +285,7 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
+  // Efek untuk mengambil data awal (urutan dan akun)
   useEffect(() => {
     const getInitialData = async () => {
         try {
@@ -311,6 +310,7 @@ export default function App() {
     getInitialData();
   }, []);
 
+  // Efek untuk polling data akun setiap 5 detik
   useEffect(() => {
     const interval = setInterval(async () => {
         try {
@@ -326,6 +326,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Membuat array akun yang sudah terurut untuk ditampilkan
   const accounts = useMemo(() => {
     const accountsArray = Object.values(accountsData);
     if (accountOrder.length === 0) {
