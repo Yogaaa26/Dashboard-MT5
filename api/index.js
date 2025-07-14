@@ -8,6 +8,7 @@ const app = express();
 
 let db;
 
+// --- Inisialisasi Firebase Admin yang Lebih Aman ---
 try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -16,8 +17,11 @@ try {
               credential: admin.credential.cert(serviceAccount),
               databaseURL: process.env.FIREBASE_DATABASE_URL 
             });
+            console.log("Firebase Admin SDK berhasil diinisialisasi.");
         }
         db = admin.database();
+    } else {
+        console.log("FIREBASE_SERVICE_ACCOUNT tidak ditemukan di Environment Variables.");
     }
 } catch (e) {
     console.error('Firebase Admin Initialization Error:', e.message);
@@ -25,14 +29,18 @@ try {
 
 app.use(cors());
 
+// Middleware untuk memeriksa koneksi DB
 const checkDbConnection = (req, res, next) => {
     if (!db) {
-        return res.status(500).send({ error: 'Koneksi database gagal.' });
+        return res.status(500).send({ error: 'Koneksi database gagal. Periksa log server.' });
     }
     next();
 };
 
+// Terapkan middleware ke semua rute
 app.use('/api', checkDbConnection);
+
+// --- Endpoint ---
 
 app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
