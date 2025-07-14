@@ -143,7 +143,8 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
               </button>
             </div>
-            {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
+            {account.tradingRobotName && <p className="text-xs text-cyan-400 -mt-1">{account.tradingRobotName}</p>}
+            {totalActivities > 1 && <p className={`text-xl font-bold mt-1 ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           {totalActivities === 1 && singleItem && (
             <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
@@ -212,7 +213,6 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
 
             const weeklyTrades = allHistory.filter(trade => {
                 if (trade.accountName !== account.accountName) return false;
-                // PERBAIKAN: Mengubah format tanggal agar bisa dibaca JavaScript
                 const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
                 return tradeDate > oneWeekAgo;
             });
@@ -285,6 +285,7 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
 
+  // Efek untuk mengambil data awal (urutan, akun, DAN riwayat)
   useEffect(() => {
     const getInitialData = async () => {
         try {
@@ -309,6 +310,7 @@ export default function App() {
     getInitialData();
   }, []);
 
+  // Efek untuk polling data akun setiap 5 detik
   useEffect(() => {
     const interval = setInterval(async () => {
         try {
@@ -324,6 +326,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Membuat array akun yang sudah terurut untuk ditampilkan
   const accounts = useMemo(() => {
     const accountsArray = Object.values(accountsData);
     if (accountOrder.length === 0) {
@@ -335,7 +338,7 @@ export default function App() {
         .map(id => accountMap.get(String(id)))
         .filter(Boolean);
 
-    const newAccounts = accountsArray.filter(acc => !accountOrder.includes(acc.id));
+    const newAccounts = accountsArray.filter(acc => !accountOrder.includes(String(acc.id)));
     
     return [...ordered, ...newAccounts];
   }, [accountsData, accountOrder]);

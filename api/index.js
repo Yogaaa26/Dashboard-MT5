@@ -1,14 +1,13 @@
 // /api/index.js
-// Versi final dengan perbaikan parser untuk mengatasi SyntaxError
+// Versi final dengan penyimpanan urutan kartu dan inisialisasi aman
 
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const app = express();
 
-let db; // Deklarasikan db di scope yang lebih tinggi
+let db;
 
-// --- Inisialisasi Firebase Admin yang Lebih Aman ---
 try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -17,11 +16,8 @@ try {
               credential: admin.credential.cert(serviceAccount),
               databaseURL: process.env.FIREBASE_DATABASE_URL 
             });
-            console.log("Firebase Admin SDK berhasil diinisialisasi.");
         }
         db = admin.database();
-    } else {
-        console.log("FIREBASE_SERVICE_ACCOUNT tidak ditemukan di Environment Variables.");
     }
 } catch (e) {
     console.error('Firebase Admin Initialization Error:', e.message);
@@ -29,21 +25,15 @@ try {
 
 app.use(cors());
 
-// Middleware untuk memeriksa koneksi DB
 const checkDbConnection = (req, res, next) => {
     if (!db) {
-        return res.status(500).send({ error: 'Koneksi database gagal. Periksa log server.' });
+        return res.status(500).send({ error: 'Koneksi database gagal.' });
     }
     next();
 };
 
-// Terapkan middleware ke semua rute
 app.use('/api', checkDbConnection);
 
-
-// --- Endpoint yang Sudah Ada ---
-
-// Endpoint ini secara khusus menggunakan parser RAW untuk membersihkan data dari EA
 app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
     try {
@@ -52,7 +42,6 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
         if (!accountId) return res.status(400).send({ error: 'accountId dibutuhkan' });
         
         await db.ref(`accounts/${accountId}`).set(data);
-
         const commandRef = db.ref(`commands/${accountId}`);
         const snapshot = await commandRef.once('value');
         if (snapshot.exists()) {
@@ -68,15 +57,13 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
 
 app.get('/api/accounts', async (req, res) => {
     try {
-        const accountsRef = db.ref('accounts');
-        const snapshot = await accountsRef.once('value');
+        const snapshot = await db.ref('accounts').once('value');
         res.json(snapshot.val() || {});
     } catch (error) {
         res.status(500).send({ error: 'Gagal mengambil data akun.' });
     }
 });
 
-// Endpoint di bawah ini secara eksplisit menggunakan parser JSON
 app.post('/api/robot-toggle', express.json(), async (req, res) => {
     const { accountId, newStatus } = req.body;
     await db.ref(`commands/${accountId}`).set({ command: 'toggle_robot', status: newStatus });
@@ -105,37 +92,29 @@ app.post('/api/save-order', express.json(), async (req, res) => {
 
 app.get('/api/get-order', async (req, res) => {
     try {
-        const orderRef = db.ref('dashboard_config/accountOrder');
-        const snapshot = await orderRef.once('value');
+        const snapshot = await db.ref('dashboard_config/accountOrder').once('value');
         res.json(snapshot.val() || []);
     } catch (error) {
         res.status(500).send({ error: 'Gagal mengambil urutan dari server.' });
     }
 });
 
-// --- Endpoint untuk Riwayat ---
-
-// PERBAIKAN: Gunakan parser RAW untuk endpoint ini juga
-app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
-    const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
+app.post('/api/log-history', express.json(), async (req, res) => {
+    const { accountId, history } = req.body;
+    if (!accountId || !history || !Array.isArray(history)) {
+        return res.status(400).send({ error: 'Data riwayat tidak valid' });
+    }
     try {
-        const { accountId, history } = JSON.parse(rawBody);
-        if (!accountId || !history || !Array.isArray(history)) {
-            return res.status(400).send({ error: 'Data riwayat tidak valid' });
-        }
-        
         await db.ref(`trade_history/${accountId}`).set(history);
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
     } catch (error) {
-        console.error('Gagal menyimpan riwayat:', error);
         res.status(500).send({ error: 'Gagal menyimpan riwayat ke server.' });
     }
 });
 
 app.get('/api/get-history', async (req, res) => {
     try {
-        const historyRef = db.ref('trade_history');
-        const snapshot = await historyRef.once('value');
+        const snapshot = await db.ref('trade_history').once('value');
         res.json(snapshot.val() || {});
     } catch (error) {
         res.status(500).send({ error: 'Gagal mengambil riwayat dari server.' });
