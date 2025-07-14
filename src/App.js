@@ -137,13 +137,16 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
       <div className="p-4 flex flex-col flex-grow min-h-0">
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
-            <div className="flex items-center gap-x-2 mb-1">
+            <div className="flex items-center gap-x-2">
               <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
               <button onClick={(e) => { e.stopPropagation(); onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on'); }} title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`} className="p-1 rounded-full hover:bg-slate-700 transition-colors">
                 <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
               </button>
             </div>
-            {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
+            {/* PERUBAHAN BARU: Menampilkan nama robot */}
+            {account.tradingRobotName && <p className="text-xs text-cyan-400 -mt-1">{account.tradingRobotName}</p>}
+            
+            {totalActivities > 1 && <p className={`text-xl font-bold mt-1 ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           {totalActivities === 1 && singleItem && (
             <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
@@ -212,7 +215,6 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
 
             const weeklyTrades = allHistory.filter(trade => {
                 if (trade.accountName !== account.accountName) return false;
-                // PERBAIKAN: Mengubah format tanggal agar bisa dibaca JavaScript
                 const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
                 return tradeDate > oneWeekAgo;
             });
