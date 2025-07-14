@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2 } from 'lucide-react';
+// PERUBAHAN DI SINI: Menambahkan ikon 'Cpu' untuk robot
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu } from 'lucide-react';
 
 // Helper function
 const formatCurrency = (value, includeSign = true) => {
@@ -109,7 +110,7 @@ const SummaryDashboard = ({ accounts }) => {
 const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
   const totalPL = useMemo(() => (account.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0), [account.positions]);
   const isProfitable = totalPL > 0;
-  
+ 
   const getGlowEffect = () => {
     if (account.status !== 'active') return 'shadow-slate-900/50';
     if (isProfitable) return 'shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.4)]';
@@ -125,7 +126,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
     else if (type === 'sell') { bgColor = 'bg-red-600'; }
     return <span className={`px-3 py-1 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
   }
-  
+ 
   const totalActivities = (account.positions?.length || 0) + (account.orders?.length || 0);
   const singleItem = totalActivities === 1 ? (account.positions?.[0] || account.orders?.[0]) : null;
   const isSingleItemPending = singleItem && (singleItem.executionType.includes('limit') || singleItem.executionType.includes('stop'));
@@ -133,7 +134,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
   return (
     <div className={`bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300 cursor-grab relative ${getGlowEffect()} ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
-      
+     
       <div className="p-4 flex flex-col flex-grow min-h-0">
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
@@ -143,13 +144,20 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
               </button>
             </div>
+            {/* PERUBAHAN DI SINI: Menampilkan nama robot */}
+            {account.tradingRobotName && (
+                <div className="flex items-center gap-x-2 text-sm text-cyan-400 mb-2">
+                    <Cpu size={16} />
+                    <span>{account.tradingRobotName}</span>
+                </div>
+            )}
             {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           {totalActivities === 1 && singleItem && (
             <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
           )}
         </div>
-        
+       
         <div className="flex-1 flex flex-col min-h-0">
           {account.status === 'inactive' && (
             <div className="flex-1 flex items-center justify-center"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>
@@ -168,7 +176,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                      {isSingleItemPending ? 
                         <div className="text-right"><p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p></div> :
                         <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
-                    }
+                     }
                 </div>
             </div>
           )}
@@ -184,7 +192,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 </div>
               ))}
               {(account.orders || []).map(ord => (
-                 <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                   <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
                     <div>{getTypePill(ord.executionType)}</div>
                     <div className="text-slate-300 font-semibold">{ord.pair}</div>
                     <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
@@ -336,7 +344,7 @@ export default function App() {
         .filter(Boolean);
 
     const newAccounts = accountsArray.filter(acc => !accountOrder.includes(acc.id));
-    
+   
     return [...ordered, ...newAccounts];
   }, [accountsData, accountOrder]);
 
@@ -409,7 +417,7 @@ export default function App() {
     const dragItemContent = reorderedAccounts[dragItem.current];
     reorderedAccounts.splice(dragItem.current, 1);
     reorderedAccounts.splice(dragOverItem.current, 0, dragItemContent);
-    
+   
     const newOrderIds = reorderedAccounts.map(acc => acc.id);
     setAccountOrder(newOrderIds);
 
@@ -468,7 +476,7 @@ export default function App() {
                     <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800/70 backdrop-blur-sm border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                   </div>
-                  
+                 
                   <SummaryDashboard accounts={accounts} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                       {filteredAccounts.map((account, index) => (
