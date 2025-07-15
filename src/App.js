@@ -453,7 +453,7 @@ export default function App() {
       <div className="max-w-7xl mx-auto">
         <header className="mb-8 flex justify-between items-center border-b border-slate-700 pb-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">Dashboard MetaTrader</h1>
+            <h1 className="text-3xl font-bold text-white">MJA Monitoring Dashboard</h1>
             <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
           </div>
           {page === 'dashboard' ? (
