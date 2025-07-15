@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, BellRing } from 'lucide-react';
 
 // Helper function
@@ -288,19 +288,21 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
   
-  const speak = (text) => {
+  // PERBAIKAN: Bungkus dengan useCallback
+  const speak = useCallback((text) => {
     if (!isSoundEnabled || !window.speechSynthesis) return;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'id-ID';
     window.speechSynthesis.speak(utterance);
-  };
+  }, [isSoundEnabled]);
 
-  const showNotification = (title, options) => {
+  // PERBAIKAN: Bungkus dengan useCallback
+  const showNotification = useCallback((title, options) => {
     if (!isNotifEnabled || !("Notification" in window) || Notification.permission !== "granted") {
         return;
     }
     new Notification(title, options);
-  };
+  }, [isNotifEnabled]);
   
   useEffect(() => {
     if(isNotifEnabled && Notification.permission !== "granted"){
@@ -325,7 +327,6 @@ export default function App() {
             setAccountsData(accountsData || {});
             setTradeHistory(historyData || {});
             
-            // Simpan posisi awal untuk perbandingan
             const initialPositions = {};
             Object.values(accountsData).forEach(acc => {
                 initialPositions[acc.accountId] = (acc.positions || []).map(p => p.ticket);
@@ -339,6 +340,7 @@ export default function App() {
     getInitialData();
   }, []);
 
+  // PERBAIKAN: Tambahkan 'speak' dan 'showNotification' ke dependency array
   useEffect(() => {
     const interval = setInterval(async () => {
         try {
@@ -346,14 +348,12 @@ export default function App() {
             const data = await response.json();
             if (data && typeof data === 'object') {
                 
-                // Logika deteksi aktivitas baru
                 Object.values(data).forEach(acc => {
                     const prevPosTickets = new Set(prevPositionsRef.current[acc.accountId] || []);
                     const currentPositions = acc.positions || [];
 
                     currentPositions.forEach(pos => {
                         if (!prevPosTickets.has(pos.ticket)) {
-                            // Posisi baru terdeteksi!
                             const message = `Posisi ${pos.executionType} dibuka pada ${pos.pair} lot ${pos.lotSize.toFixed(2)}`;
                             showNotification(`Aktivitas Baru: ${acc.accountName}`, { body: message });
                             speak(message);
@@ -361,7 +361,6 @@ export default function App() {
                     });
                 });
 
-                // Update posisi untuk perbandingan berikutnya
                 const newPositions = {};
                 Object.values(data).forEach(acc => {
                     newPositions[acc.accountId] = (acc.positions || []).map(p => p.ticket);
@@ -375,7 +374,7 @@ export default function App() {
         }
     }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [speak, showNotification]);
 
   const accounts = useMemo(() => {
     const accountsArray = Object.values(accountsData);
