@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, Volume2, VolumeX, BellRing } from 'lucide-react';
-// PERUBAHAN: Impor library Firebase
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set } from "firebase/database";
-import { firebaseConfig } from './firebaseConfig'; // Impor konfigurasi Anda
+import { getDatabase, ref, onValue, set, remove } from "firebase/database";
+import { firebaseConfig } from './firebaseConfig';
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
@@ -151,13 +150,8 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
               </button>
             </div>
-            {account.tradingRobotName && (
-                <div className="flex items-center gap-x-2 text-sm text-cyan-400 mb-2">
-                    <Cpu size={16} />
-                    <span>{account.tradingRobotName}</span>
-                </div>
-            )}
-            {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
+            {account.tradingRobotName && <p className="text-xs text-cyan-400 -mt-1">{account.tradingRobotName}</p>}
+            {totalActivities > 1 && <p className={`text-xl font-bold mt-1 ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           {totalActivities === 1 && singleItem && (
             <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
@@ -400,19 +394,24 @@ export default function App() {
   }, [speak, showNotification]); // Dependensi tetap ada untuk fungsi notifikasi
 
   const accounts = useMemo(() => {
-    const accountsArray = Object.values(accountsData);
-    if (accountOrder.length === 0) {
-        return accountsArray.sort((a, b) => a.accountName.localeCompare(b.accountName));
-    }
+    const allAccounts = Object.values(accountsData);
+    
+    if (accountOrder && accountOrder.length > 0) {
+      const accountMap = new Map(allAccounts.map(acc => [String(acc.id), acc]));
+      const orderedIdSet = new Set(accountOrder.map(id => String(id)));
 
-    const accountMap = new Map(accountsArray.map(acc => [String(acc.id), acc]));
-    const ordered = accountOrder
+      const orderedList = accountOrder
         .map(id => accountMap.get(String(id)))
         .filter(Boolean);
+        
+      const unorderedList = allAccounts
+        .filter(acc => !orderedIdSet.has(String(acc.id)))
+        .sort((a, b) => a.accountName.localeCompare(b.accountName));
 
-    const newAccounts = accountsArray.filter(acc => !accountOrder.includes(String(acc.id)));
-    
-    return [...ordered, ...newAccounts];
+      return [...orderedList, ...unorderedList];
+    }
+
+    return allAccounts.sort((a, b) => a.accountName.localeCompare(b.accountName));
   }, [accountsData, accountOrder]);
 
 
@@ -436,8 +435,8 @@ export default function App() {
     const { accountId, accountName } = deleteModal;
     if (!accountId) return;
     try {
-        await set(ref(db, `accounts/${accountId}`), null);
-        await set(ref(db, `commands/${accountId}`), null);
+        await remove(ref(db, `accounts/${accountId}`));
+        await remove(ref(db, `commands/${accountId}`));
         addNotification('Sukses', `Akun ${accountName} telah dihapus.`, 'take_profit_profit');
     } catch (error) {
         addNotification('Error', 'Gagal menghapus akun. Mohon refresh halaman.', 'take_profit_loss');
