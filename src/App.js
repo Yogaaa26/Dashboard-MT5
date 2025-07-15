@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-// PERBAIKAN: Ikon 'Cpu' yang tidak terpakai telah dihapus dari daftar impor ini
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, Volume2, VolumeX, BellRing } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, remove } from "firebase/database";
+import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
 
 // Inisialisasi Firebase
@@ -334,17 +333,14 @@ export default function App() {
     }
   };
 
-  // PERUBAHAN KUNCI: Menggunakan real-time listeners dari Firebase
   useEffect(() => {
     const accountsRef = ref(db, 'accounts/');
     const historyRef = ref(db, 'trade_history/');
     const orderRef = ref(db, 'dashboard_config/accountOrder');
 
-    // Listener untuk data akun
     const unsubscribeAccounts = onValue(accountsRef, (snapshot) => {
         const data = snapshot.val() || {};
         
-        // Logika deteksi aktivitas baru
         if(initialLoadComplete.current) {
             Object.values(data).forEach(acc => {
                 const prevPosTickets = new Set(prevPositionsRef.current[acc.accountId] || []);
@@ -366,7 +362,6 @@ export default function App() {
         });
         prevPositionsRef.current = newPositions;
         
-        // Tandai bahwa data awal sudah dimuat setelah pemrosesan pertama
         if(!initialLoadComplete.current) {
             initialLoadComplete.current = true;
         }
@@ -374,25 +369,22 @@ export default function App() {
         setAccountsData(data);
     });
 
-    // Listener untuk data riwayat
     const unsubscribeHistory = onValue(historyRef, (snapshot) => {
         const data = snapshot.val() || {};
         setTradeHistory(data);
     });
 
-    // Listener untuk urutan kartu
     const unsubscribeOrder = onValue(orderRef, (snapshot) => {
         const data = snapshot.val() || [];
         setAccountOrder(data);
     });
 
-    // Membersihkan listener saat komponen unmount
     return () => {
         unsubscribeAccounts();
         unsubscribeHistory();
         unsubscribeOrder();
     };
-  }, [speak, showNotification]); // Dependensi tetap ada untuk fungsi notifikasi
+  }, [speak, showNotification]);
 
   const accounts = useMemo(() => {
     const allAccounts = Object.values(accountsData);
@@ -418,7 +410,11 @@ export default function App() {
 
   const handleToggleRobot = async (accountId, newStatus) => {
     try {
-        await set(ref(db, `commands/${accountId}`), { command: 'toggle_robot', status: newStatus });
+        await fetch('/api/robot-toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId, newStatus })
+        });
     } catch (error) {
         addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
     }
@@ -436,8 +432,11 @@ export default function App() {
     const { accountId, accountName } = deleteModal;
     if (!accountId) return;
     try {
-        await remove(ref(db, `accounts/${accountId}`));
-        await remove(ref(db, `commands/${accountId}`));
+        await fetch('/api/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId })
+        });
         addNotification('Sukses', `Akun ${accountName} telah dihapus.`, 'take_profit_profit');
     } catch (error) {
         addNotification('Error', 'Gagal menghapus akun. Mohon refresh halaman.', 'take_profit_loss');
@@ -468,14 +467,18 @@ export default function App() {
     reorderedAccounts.splice(dragOverItem.current, 0, dragItemContent);
     
     const newOrderIds = reorderedAccounts.map(acc => acc.id);
-    setAccountOrder(newOrderIds); // Update UI secara instan
+    setAccountOrder(newOrderIds);
 
     dragItem.current = null;
     dragOverItem.current = null;
     setDragging(false);
 
     try {
-        await set(ref(db, 'dashboard_config/accountOrder'), newOrderIds);
+        await fetch('/api/save-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: newOrderIds })
+        });
         addNotification('Sukses', 'Urutan kartu telah disimpan.', 'take_profit_profit');
     } catch (error) {
         addNotification('Error', 'Gagal menyimpan urutan kartu.', 'take_profit_loss');
