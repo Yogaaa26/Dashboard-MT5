@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, Volume2, VolumeX, BellRing } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue } from "firebase/database";
+import { getDatabase, ref, onValue, set, remove } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
 
 // Inisialisasi Firebase
@@ -150,8 +150,13 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
               </button>
             </div>
-            {account.tradingRobotName && <p className="text-xs text-cyan-400 -mt-1">{account.tradingRobotName}</p>}
-            {totalActivities > 1 && <p className={`text-xl font-bold mt-1 ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
+            {account.tradingRobotName && (
+                <div className="flex items-center gap-x-2 text-sm text-cyan-400 mb-2">
+                    <Cpu size={16} />
+                    <span>{account.tradingRobotName}</span>
+                </div>
+            )}
+            {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           {totalActivities === 1 && singleItem && (
             <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
@@ -298,6 +303,12 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
   
+  // PERBAIKAN: Memindahkan fungsi helper ke dalam komponen dan membungkusnya dengan useCallback
+  const formatNumberForSpeech = useCallback((num) => {
+    const numStr = String(num);
+    return numStr.replace(/\./g, ' koma ').split('').join(' ');
+  }, []);
+
   const speak = useCallback((text) => {
     if (!isSoundEnabled || !window.speechSynthesis) return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -332,8 +343,8 @@ export default function App() {
         });
     }
   };
-// PERUBAHAN KUNCI: Logika notifikasi di dalam listener Firebase
-    useEffect(() => {
+
+  useEffect(() => {
     const accountsRef = ref(db, 'accounts/');
     const historyRef = ref(db, 'trade_history/');
     const orderRef = ref(db, 'dashboard_config/accountOrder');
@@ -348,7 +359,6 @@ export default function App() {
 
                 currentPositions.forEach(pos => {
                     if (!prevPosTickets.has(pos.ticket)) {
-                        // PERUBAHAN: Pesan notifikasi menjadi lebih detail
                         const executionType = pos.executionType.replace('_', ' ');
                         const capitalizedType = executionType.charAt(0).toUpperCase() + executionType.slice(1);
                         
@@ -393,7 +403,7 @@ export default function App() {
         unsubscribeHistory();
         unsubscribeOrder();
     };
-  }, [speak, showNotification]);
+  }, [speak, showNotification, formatNumberForSpeech]); // PERBAIKAN: Menambahkan formatNumberForSpeech ke dependency array
 
   const accounts = useMemo(() => {
     const allAccounts = Object.values(accountsData);
@@ -419,11 +429,7 @@ export default function App() {
 
   const handleToggleRobot = async (accountId, newStatus) => {
     try {
-        await fetch('/api/robot-toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accountId, newStatus })
-        });
+        await set(ref(db, `commands/${accountId}`), { command: 'toggle_robot', status: newStatus });
     } catch (error) {
         addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
     }
@@ -441,11 +447,8 @@ export default function App() {
     const { accountId, accountName } = deleteModal;
     if (!accountId) return;
     try {
-        await fetch('/api/delete-account', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accountId })
-        });
+        await remove(ref(db, `accounts/${accountId}`));
+        await remove(ref(db, `commands/${accountId}`));
         addNotification('Sukses', `Akun ${accountName} telah dihapus.`, 'take_profit_profit');
     } catch (error) {
         addNotification('Error', 'Gagal menghapus akun. Mohon refresh halaman.', 'take_profit_loss');
@@ -483,11 +486,7 @@ export default function App() {
     setDragging(false);
 
     try {
-        await fetch('/api/save-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order: newOrderIds })
-        });
+        await set(ref(db, 'dashboard_config/accountOrder'), newOrderIds);
         addNotification('Sukses', 'Urutan kartu telah disimpan.', 'take_profit_profit');
     } catch (error) {
         addNotification('Error', 'Gagal menyimpan urutan kartu.', 'take_profit_loss');
