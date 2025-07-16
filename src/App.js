@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 // PERUBAHAN: Menambahkan ikon 'XCircle' untuk tombol batal
 import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, XCircle } from 'lucide-react';
 
@@ -173,7 +173,12 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
                 <div className="flex flex-col justify-start items-end">
                     <p className="text-slate-500 text-xs mb-1">Status</p>
                      {isSingleItemPending ? 
-                        <div className="text-right"><p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p></div> :
+                        <div className="flex items-center gap-x-2">
+                            <p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-1"/> Pending</p>
+                            <button onClick={(e) => { e.stopPropagation(); handleCancelOrder(account.accountId, singleItem.ticket); }} title="Batalkan Order" className="text-slate-500 hover:text-red-500 transition-colors">
+                                <XCircle size={18} />
+                            </button>
+                        </div> :
                         <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
                      }
                 </div>
