@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing, XCircle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
+
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
@@ -192,23 +193,18 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 </div>
               ))}
               {(account.orders || []).map(ord => (
-                 <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                    <div>{getTypePill(ord.executionType)}</div>
-                    <div className="text-slate-300 font-semibold">{ord.pair}</div>
-                    <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
-                    <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="absolute bottom-3 right-3 p-1 rounded-full text-slate-600 hover:bg-slate-900/50 hover:text-red-500 transition-all duration-200 opacity-50 hover:opacity-100">
-        <Trash2 size={16} />
-      </button>
-    </div>
-  );
-};
+               <div key={ord.ticket} className="grid grid-cols-5 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                  <div className="col-span-1">{getTypePill(ord.executionType)}</div>
+                  <div className="col-span-1 text-slate-300 font-semibold">{ord.pair}</div>
+                  <div className="col-span-1 text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
+                  <div className="col-span-1 text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
+                  <div className="col-span-1 flex justify-end">
+                      <button onClick={(e) => { e.stopPropagation(); handleCancelOrder(account.accountId, ord.ticket); }} title="Batalkan Order" className="text-slate-500 hover:text-red-500 transition-colors">
+                          <XCircle size={16} />
+                      </button>
+                  </div>
+              </div>
+            ))}
 
 const HistoryPage = ({ accounts, tradeHistory }) => {
     const accountSummary = useMemo(() => {

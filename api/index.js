@@ -142,4 +142,21 @@ app.get('/api/get-history', async (req, res) => {
     }
 });
 
+// --- ENDPOINT BARU UNTUK MEMBATALKAN ORDER ---
+app.post('/api/cancel-order', express.json(), async (req, res) => {
+    const { accountId, ticket } = req.body;
+    if (!accountId || !ticket) {
+        return res.status(400).send({ error: 'accountId dan ticket dibutuhkan' });
+    }
+    try {
+        const commandRef = db.ref(`commands/${accountId}`);
+        await commandRef.set({ command: 'cancel_order', ticket: ticket });
+        res.status(200).json({ message: `Perintah pembatalan untuk tiket ${ticket} telah dikirim.` });
+    } catch (error) {
+        console.error('Gagal mengirim perintah pembatalan:', error);
+        res.status(500).send({ error: 'Gagal mengirim perintah ke server.' });
+    }
+});
+
+
 module.exports = app;
