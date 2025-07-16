@@ -449,6 +449,19 @@ export default function App() {
     dragOverItem.current = pos;
   };
 
+const handleCancelOrder = async (accountId, ticket) => {
+    addNotification('Perintah Terkirim', `Mencoba membatalkan order tiket ${ticket}...`, 'default');
+    try {
+        await fetch('/api/cancel-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId, ticket })
+        });
+    } catch (error) {
+        addNotification('Error', 'Gagal mengirim perintah pembatalan.', 'take_profit_loss');
+    }
+  };
+
   const handleDragEnd = async () => {
     if (dragOverItem.current === null || dragItem.current === dragOverItem.current) {
       setDragging(false);
@@ -537,6 +550,7 @@ export default function App() {
                               account={account}
                               onToggleRobot={handleToggleRobot}
                               onDelete={openDeleteModal}
+                              handleCancelOrder={handleCancelOrder} // <-- TAMBAHKAN PROP INI
                               index={index}
                               handleDragStart={handleDragStart}
                               handleDragEnter={handleDragEnter}
