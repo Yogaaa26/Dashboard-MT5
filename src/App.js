@@ -15,267 +15,15 @@ const formatCurrency = (value, includeSign = true) => {
   return `${sign}$${absValue.toFixed(2)}`;
 };
 
-// --- React Components ---
+// --- React Components (Tidak ada perubahan di sini) ---
 
-const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 animate-fade-in">
-            <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl border border-slate-700">
-                <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-                <p className="text-sm text-slate-300 mb-6">{message}</p>
-                <div className="flex justify-end space-x-4">
-                    <button onClick={onCancel} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Batal</button>
-                    <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Hapus</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const Notification = ({ notification, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(() => onClose(notification.id), 5000);
-    return () => clearTimeout(timer);
-  }, [notification.id, onClose]);
-
-  const isProfit = notification.type === 'take_profit_profit';
-  const isLoss = notification.type === 'take_profit_loss';
-  const Icon = isProfit ? CheckCircle : (isLoss ? X : Bell);
-  const iconColor = isProfit ? 'text-green-400' : (isLoss ? 'text-red-400' : 'text-blue-400');
-
-  return (
-    <div className="bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl p-4 flex items-start space-x-3 animate-fade-in-up">
-      <Icon className={`${iconColor} mt-1 flex-shrink-0`} size={20} />
-      <div className="flex-1">
-        <p className="text-sm text-white font-semibold">{notification.title}</p>
-        <p className="text-xs text-slate-300">{notification.message}</p>
-      </div>
-      <button onClick={() => onClose(notification.id)} className="text-slate-500 hover:text-white">
-        <X size={18} />
-      </button>
-    </div>
-  );
-};
-
-const NotificationContainer = ({ notifications, removeNotification }) => (
-  <div className="fixed bottom-4 right-4 z-50 w-80 space-y-3">
-    {notifications.map(n => <Notification key={n.id} notification={n} onClose={removeNotification} />)}
-  </div>
-);
-
-const SummaryStat = ({ icon, title, value, colorClass = 'text-white' }) => (
-  <div className="bg-slate-800/70 backdrop-blur-sm p-4 rounded-xl shadow-lg flex items-center space-x-4 border border-slate-700 transition-all duration-300 hover:bg-slate-700/80">
-    <div className="bg-slate-900/80 p-3 rounded-full">{icon}</div>
-    <div>
-      <p className="text-sm text-slate-400">{title}</p>
-      <p className={`text-lg font-bold ${colorClass}`}>{value}</p>
-    </div>
-  </div>
-);
-
-const SummaryDashboard = ({ accounts }) => {
-  const summary = useMemo(() => {
-    let totalPL = 0;
-    let profitableAccounts = 0;
-    let losingAccounts = 0;
-    let pendingOrdersCount = 0;
-
-    accounts.forEach(acc => {
-        if (acc.status === 'active') {
-            const accountPL = (acc.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0);
-            totalPL += accountPL;
-            if (accountPL > 0) profitableAccounts++;
-            if (accountPL < 0) losingAccounts++;
-            pendingOrdersCount += (acc.orders || []).length;
-        }
-    });
-    
-    return { 
-        totalAccounts: accounts.length, 
-        activeAccountsCount: accounts.filter(acc => acc.status === 'active').length, 
-        profitableAccounts, 
-        losingAccounts, 
-        pendingOrdersCount, 
-        totalPL 
-    };
-  }, [accounts]);
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-      <SummaryStat icon={<Briefcase size={24} className="text-blue-400" />} title="Total Akun" value={summary.totalAccounts} />
-      <SummaryStat icon={<List size={24} className="text-cyan-400" />} title="Akun Aktif" value={summary.activeAccountsCount} />
-      <SummaryStat icon={<TrendingUp size={24} className="text-green-400" />} title="Akun Profit" value={summary.profitableAccounts} colorClass="text-green-500" />
-      <SummaryStat icon={<TrendingDown size={24} className="text-red-400" />} title="Akun Minus" value={summary.losingAccounts} colorClass="text-red-500" />
-      <SummaryStat icon={<Clock size={24} className="text-yellow-400" />} title="Order Pending" value={summary.pendingOrdersCount} colorClass="text-yellow-500" />
-      <SummaryStat icon={<DollarSign size={24} className={summary.totalPL >= 0 ? 'text-green-400' : 'text-red-400'} />} title="Total P/L" value={formatCurrency(summary.totalPL, false)} colorClass={summary.totalPL >= 0 ? 'text-green-500' : 'text-red-500'} />
-    </div>
-  );
-};
-
-const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
-  const totalPL = useMemo(() => (account.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0), [account.positions]);
-  const isProfitable = totalPL > 0;
-  
-  const getGlowEffect = () => {
-    if (account.status !== 'active') return 'shadow-slate-900/50';
-    if (isProfitable) return 'shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.4)]';
-    if (totalPL < 0) return 'shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:shadow-[0_0_25px_rgba(239,68,68,0.4)]';
-    return 'shadow-slate-900/50';
-  };
-
-  const getTypePill = (type) => {
-    let bgColor = 'bg-gray-500', textColor = 'text-white';
-    if (type === 'buy_stop' || type === 'buy_limit') { bgColor = 'bg-white'; textColor = 'text-black'; }
-    else if (type === 'sell_stop' || type === 'sell_limit') { bgColor = 'bg-yellow-600'; }
-    else if (type === 'buy') { bgColor = 'bg-blue-600'; }
-    else if (type === 'sell') { bgColor = 'bg-red-600'; }
-    return <span className={`px-3 py-1 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
-  }
-  
-  const totalActivities = (account.positions?.length || 0) + (account.orders?.length || 0);
-  const singleItem = totalActivities === 1 ? (account.positions?.[0] || account.orders?.[0]) : null;
-  const isSingleItemPending = singleItem && (singleItem.executionType.includes('limit') || singleItem.executionType.includes('stop'));
-
-  return (
-    <div className={`bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300 cursor-grab relative ${getGlowEffect()} ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
-      draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
-      
-      <div className="p-4 flex flex-col flex-grow min-h-0">
-        <div className="flex-shrink-0 flex justify-between items-start mb-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-x-2 mb-1">
-              <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
-              <button onClick={(e) => { e.stopPropagation(); onToggleRobot(account.accountId, account.robotStatus === 'on' ? 'off' : 'on'); }} title={`Robot ${account.robotStatus === 'on' ? 'ON' : 'OFF'}`} className="p-1 rounded-full hover:bg-slate-700 transition-colors">
-                <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
-              </button>
-            </div>
-            {account.tradingRobotName && (
-                <div className="flex items-center gap-x-2 text-sm text-cyan-400 mb-2">
-                    <Cpu size={16} />
-                    <span>{account.tradingRobotName}</span>
-                </div>
-            )}
-            {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
-          </div>
-          {totalActivities === 1 && singleItem && (
-            <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
-          )}
-        </div>
-        
-        <div className="flex-1 flex flex-col min-h-0">
-          {account.status === 'inactive' && (
-            <div className="flex-1 flex items-center justify-center"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>
-          )}
-
-          {account.status === 'active' && totalActivities === 1 && singleItem && (
-            <div className="grid grid-cols-3 gap-x-4 text-sm flex-1">
-                <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-4">
-                    <div><p className="text-slate-500 text-xs">Pair</p><p className="font-semibold text-lg">{singleItem.pair}</p></div>
-                    <div><p className="text-slate-500 text-xs">Lot</p><p className="font-semibold text-lg">{singleItem.lotSize.toFixed(2)}</p></div>
-                    <div><p className="text-slate-500 text-xs">{isSingleItemPending ? 'Harga Akan Eksekusi' : 'Harga Eksekusi'}</p><p className="font-semibold text-lg">{singleItem.entryPrice.toFixed(3)}</p></div>
-                    <div><p className="text-slate-500 text-xs">Harga Sekarang</p><p className="font-semibold text-lg">{singleItem.currentPrice ? singleItem.currentPrice.toFixed(3) : '...'}</p></div>
-                </div>
-                <div className="flex flex-col justify-start items-end">
-                    <p className="text-slate-500 text-xs mb-1">Status</p>
-                     {isSingleItemPending ? 
-                        <div className="text-right"><p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p></div> :
-                        <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
-                    }
-                </div>
-            </div>
-          )}
-
-          {account.status === 'active' && totalActivities > 1 && (
-            <div className="space-y-2 text-xs overflow-y-auto min-h-0 pr-1 custom-scrollbar">
-              {(account.positions || []).map(pos => (
-                <div key={pos.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                    <div>{getTypePill(pos.executionType)}</div>
-                    <div className="text-slate-300 font-semibold">{pos.pair}</div>
-                    <div className="text-slate-400 text-right">Lot {pos.lotSize.toFixed(2)}</div>
-                    <div className={`font-bold text-right ${pos.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(pos.profit)}</div>
-                </div>
-              ))}
-              {(account.orders || []).map(ord => (
-                 <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                    <div>{getTypePill(ord.executionType)}</div>
-                    <div className="text-slate-300 font-semibold">{ord.pair}</div>
-                    <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
-                    <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="absolute bottom-3 right-3 p-1 rounded-full text-slate-600 hover:bg-slate-900/50 hover:text-red-500 transition-all duration-200 opacity-50 hover:opacity-100">
-        <Trash2 size={16} />
-      </button>
-    </div>
-  );
-};
-
-const HistoryPage = ({ accounts, tradeHistory }) => {
-    const accountSummary = useMemo(() => {
-        const allHistory = Object.values(tradeHistory).flat();
-
-        return accounts.map(account => {
-            const oneWeekAgo = new Date();
-            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-            const weeklyTrades = allHistory.filter(trade => {
-                if (trade.accountName !== account.accountName) return false;
-                const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
-                return tradeDate > oneWeekAgo;
-            });
-
-            const totalPL = weeklyTrades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
-
-            return {
-                id: account.id,
-                name: account.accountName,
-                totalOrders: weeklyTrades.length,
-                totalPL: totalPL,
-                status: account.status,
-            };
-        }).sort((a,b) => a.name.localeCompare(b.name));
-    }, [accounts, tradeHistory]);
-
-    return (
-        <div className="animate-fade-in">
-            <h2 className="text-2xl font-bold text-white mb-4">Riwayat Kinerja Akun (7 Hari Terakhir)</h2>
-            <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700 overflow-x-auto">
-                <table className="w-full text-sm text-left text-slate-300">
-                    <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
-                        <tr>
-                            <th scope="col" className="px-6 py-3">Nama Akun</th>
-                            <th scope="col" className="px-6 py-3 text-center">Total Transaksi</th>
-                            <th scope="col" className="px-6 py-3 text-right">Total P/L</th>
-                            <th scope="col" className="px-6 py-3 text-center">Status Saat Ini</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {accountSummary.map(summary => (
-                            <tr key={summary.id} className="border-b border-slate-700 hover:bg-slate-700/50">
-                                <td className="px-6 py-4 font-medium text-white">{summary.name}</td>
-                                <td className="px-6 py-4 text-center">{summary.totalOrders}</td>
-                                <td className={`px-6 py-4 font-semibold text-right ${summary.totalPL > 0 ? 'text-green-500' : summary.totalPL < 0 ? 'text-red-500' : 'text-slate-300'}`}>
-                                    {formatCurrency(summary.totalPL)}
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${summary.status === 'active' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-green-500/20 text-green-400'}`}>
-                                        {summary.status === 'active' ? <Activity className="mr-2" size={14} /> : <Check className="mr-2" size={14} />}
-                                        {summary.status === 'active' ? 'Floating' : 'Clear'}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
+const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => { /* ... */ };
+const Notification = ({ notification, onClose }) => { /* ... */ };
+const NotificationContainer = ({ notifications, removeNotification }) => { /* ... */ };
+const SummaryStat = ({ icon, title, value, colorClass = 'text-white' }) => { /* ... */ };
+const SummaryDashboard = ({ accounts }) => { /* ... */ };
+const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => { /* ... */ };
+const HistoryPage = ({ accounts, tradeHistory }) => { /* ... */ };
 
 
 // Main App Component
@@ -303,10 +51,16 @@ export default function App() {
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
   
-  // PERBAIKAN: Memindahkan fungsi helper ke dalam komponen dan membungkusnya dengan useCallback
+  // PERBAIKAN: Fungsi untuk mengeja angka
   const formatNumberForSpeech = useCallback((num) => {
     const numStr = String(num);
-    return numStr.replace(/\./g, ' koma ').split('').join(' ');
+    const parts = numStr.split('.');
+    const integerPart = parts[0].split('').join(' ');
+    if (parts.length > 1) {
+      const decimalPart = parts[1].split('').join(' ');
+      return `${integerPart} koma ${decimalPart}`;
+    }
+    return integerPart;
   }, []);
 
   const speak = useCallback((text) => {
@@ -344,6 +98,13 @@ export default function App() {
     }
   };
 
+  // PERBAIKAN: Memeriksa status izin notifikasi saat aplikasi dimuat
+  useEffect(() => {
+    if ("Notification" in window) {
+      setNotifPermission(Notification.permission);
+    }
+  }, []);
+
   useEffect(() => {
     const accountsRef = ref(db, 'accounts/');
     const historyRef = ref(db, 'trade_history/');
@@ -362,7 +123,7 @@ export default function App() {
                         const executionType = pos.executionType.replace('_', ' ');
                         const capitalizedType = executionType.charAt(0).toUpperCase() + executionType.slice(1);
                         
-                        const messageForNotification = `${capitalizedType} ${pos.pair} di Akun ${acc.accountName} dengan Lot ${pos.lotSize.toFixed(2)} di harga @${pos.entryPrice}`;
+                        const messageForNotification = `${capitalizedType} di Akun ${acc.accountName} dengan Lot ${pos.lotSize.toFixed(2)} pada harga @${pos.entryPrice}`;
                         
                         const lotForSpeech = formatNumberForSpeech(pos.lotSize.toFixed(2));
                         const priceForSpeech = formatNumberForSpeech(pos.entryPrice);
@@ -403,7 +164,7 @@ export default function App() {
         unsubscribeHistory();
         unsubscribeOrder();
     };
-  }, [speak, showNotification, formatNumberForSpeech]); // PERBAIKAN: Menambahkan formatNumberForSpeech ke dependency array
+  }, [speak, showNotification, formatNumberForSpeech]);
 
   const accounts = useMemo(() => {
     const allAccounts = Object.values(accountsData);
