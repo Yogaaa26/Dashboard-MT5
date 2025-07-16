@@ -332,15 +332,17 @@ export default function App() {
         });
     }
   };
-
+// PERUBAHAN KUNCI: Logika notifikasi di dalam listener Firebase
   useEffect(() => {
     const accountsRef = ref(db, 'accounts/');
     const historyRef = ref(db, 'trade_history/');
     const orderRef = ref(db, 'dashboard_config/accountOrder');
 
+    // Listener untuk data akun
     const unsubscribeAccounts = onValue(accountsRef, (snapshot) => {
         const data = snapshot.val() || {};
         
+        // Logika deteksi aktivitas baru
         if(initialLoadComplete.current) {
             Object.values(data).forEach(acc => {
                 const prevPosTickets = new Set(prevPositionsRef.current[acc.accountId] || []);
@@ -348,7 +350,11 @@ export default function App() {
 
                 currentPositions.forEach(pos => {
                     if (!prevPosTickets.has(pos.ticket)) {
-                        const message = `Posisi ${pos.executionType} dibuka pada ${pos.pair} lot ${pos.lotSize.toFixed(2)}`;
+                        // PERUBAHAN DI SINI: Pesan notifikasi menjadi lebih detail
+                        const executionType = pos.executionType.replace('_', ' ');
+                        const capitalizedType = executionType.charAt(0).toUpperCase() + executionType.slice(1);
+                        const message = `${capitalizedType} ${pos.pair} di Akun ${acc.accountName} dengan Lot ${pos.lotSize.toFixed(2)} di harga @${pos.entryPrice}`;
+                        
                         showNotification(`Aktivitas Baru: ${acc.accountName}`, { body: message, icon: '/logo192.png' });
                         speak(message);
                     }
@@ -369,16 +375,19 @@ export default function App() {
         setAccountsData(data);
     });
 
+    // Listener untuk data riwayat
     const unsubscribeHistory = onValue(historyRef, (snapshot) => {
         const data = snapshot.val() || {};
         setTradeHistory(data);
     });
 
+    // Listener untuk urutan kartu
     const unsubscribeOrder = onValue(orderRef, (snapshot) => {
         const data = snapshot.val() || [];
         setAccountOrder(data);
     });
 
+    // Membersihkan listener saat komponen unmount
     return () => {
         unsubscribeAccounts();
         unsubscribeHistory();
