@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-// PERUBAHAN: Menambahkan ikon 'XCircle' untuk tombol batal
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+// PERBAIKAN: Menghapus 'useCallback' yang tidak terpakai
 import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, XCircle } from 'lucide-react';
 
 // Helper function
