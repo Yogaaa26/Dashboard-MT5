@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing, XCircle } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, Volume2, VolumeX, BellRing, XCircle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
@@ -449,7 +449,7 @@ export default function App() {
     dragOverItem.current = pos;
   };
 
-const handleCancelOrder = async (accountId, ticket) => {
+   const handleCancelOrder = async (accountId, ticket) => {
     addNotification('Perintah Terkirim', `Mencoba membatalkan order tiket ${ticket}...`, 'default');
     try {
         await fetch('/api/cancel-order', {
