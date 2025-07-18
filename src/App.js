@@ -1,6 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-// PERBAIKAN: Menghapus 'useCallback' yang tidak terpakai
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, onValue } from "firebase/database";
+import { firebaseConfig } from './firebaseConfig';
+
+// Inisialisasi Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 // Helper function
 const formatCurrency = (value, includeSign = true) => {
@@ -107,10 +113,10 @@ const SummaryDashboard = ({ accounts }) => {
   );
 };
 
-const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
+const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
   const totalPL = useMemo(() => (account.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0), [account.positions]);
   const isProfitable = totalPL > 0;
- 
+  
   const getGlowEffect = () => {
     if (account.status !== 'active') return 'shadow-slate-900/50';
     if (isProfitable) return 'shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.4)]';
@@ -126,7 +132,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
     else if (type === 'sell') { bgColor = 'bg-red-600'; }
     return <span className={`px-3 py-1 text-xs font-semibold rounded-full ${bgColor} ${textColor}`}>{type.replace('_', ' ').toUpperCase()}</span>;
   }
- 
+  
   const totalActivities = (account.positions?.length || 0) + (account.orders?.length || 0);
   const singleItem = totalActivities === 1 ? (account.positions?.[0] || account.orders?.[0]) : null;
   const isSingleItemPending = singleItem && (singleItem.executionType.includes('limit') || singleItem.executionType.includes('stop'));
@@ -134,7 +140,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
   return (
     <div className={`bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300 cursor-grab relative ${getGlowEffect()} ${isDragging ? 'opacity-50 scale-105' : 'opacity-100'}`}
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
-     
+      
       <div className="p-4 flex flex-col flex-grow min-h-0">
         <div className="flex-shrink-0 flex justify-between items-start mb-4">
           <div className="flex-1">
@@ -144,19 +150,14 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
                 <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
               </button>
             </div>
-            {account.tradingRobotName && (
-                <div className="flex items-center gap-x-2 text-sm text-cyan-400 mb-2">
-                    <Cpu size={16} />
-                    <span>{account.tradingRobotName}</span>
-                </div>
-            )}
-            {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
+            {account.tradingRobotName && <p className="text-xs text-cyan-400 -mt-1">{account.tradingRobotName}</p>}
+            {totalActivities > 1 && <p className={`text-xl font-bold mt-1 ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           {totalActivities === 1 && singleItem && (
             <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
           )}
         </div>
-       
+        
         <div className="flex-1 flex flex-col min-h-0">
           {account.status === 'inactive' && (
             <div className="flex-1 flex items-center justify-center"><p className="text-slate-400 italic">Tidak ada order aktif</p></div>
@@ -173,14 +174,9 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
                 <div className="flex flex-col justify-start items-end">
                     <p className="text-slate-500 text-xs mb-1">Status</p>
                      {isSingleItemPending ? 
-                        <div className="flex items-center gap-x-2">
-                            <p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-1"/> Pending</p>
-                            <button onClick={(e) => { e.stopPropagation(); handleCancelOrder(account.accountId, singleItem.ticket); }} title="Batalkan Order" className="text-slate-500 hover:text-red-500 transition-colors">
-                                <XCircle size={18} />
-                            </button>
-                        </div> :
+                        <div className="text-right"><p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p></div> :
                         <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
-                     }
+                    }
                 </div>
             </div>
           )}
@@ -196,16 +192,11 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
                 </div>
               ))}
               {(account.orders || []).map(ord => (
-                   <div key={ord.ticket} className="grid grid-cols-5 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                    <div className="col-span-1">{getTypePill(ord.executionType)}</div>
-                    <div className="col-span-1 text-slate-300 font-semibold">{ord.pair}</div>
-                    <div className="col-span-1 text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
-                    <div className="col-span-1 text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
-                    <div className="col-span-1 flex justify-end">
-                        <button onClick={(e) => { e.stopPropagation(); handleCancelOrder(account.accountId, ord.ticket); }} title="Batalkan Order" className="text-slate-500 hover:text-red-500 transition-colors">
-                            <XCircle size={16} />
-                        </button>
-                    </div>
+                 <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                    <div>{getTypePill(ord.executionType)}</div>
+                    <div className="text-slate-300 font-semibold">{ord.pair}</div>
+                    <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
+                    <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
                 </div>
               ))}
             </div>
@@ -291,6 +282,12 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [page, setPage] = useState('dashboard');
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, accountId: null, accountName: '' });
+  
+  const [isNotifEnabled, setIsNotifEnabled] = useState(false);
+  const [notifPermission, setNotifPermission] = useState('default');
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false);
+  const prevPositionsRef = useRef({});
+  const initialLoadComplete = useRef(false);
 
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -300,68 +297,118 @@ export default function App() {
     setNotifications(prev => [{ id: Date.now(), title, message, type }, ...prev].slice(0, 5));
   };
   const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
+  
+  const speak = useCallback((text) => {
+    if (!isSoundEnabled || !window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'id-ID';
+    window.speechSynthesis.speak(utterance);
+  }, [isSoundEnabled]);
 
-  useEffect(() => {
-    const getInitialData = async () => {
-        try {
-            const [orderRes, accountsRes, historyRes] = await Promise.all([
-                fetch('/api/get-order'),
-                fetch('/api/accounts'),
-                fetch('/api/get-history')
-            ]);
-            const orderData = await orderRes.json();
-            const accountsData = await accountsRes.json();
-            const historyData = await historyRes.json();
-
-            setAccountOrder(orderData || []);
-            setAccountsData(accountsData || {});
-            setTradeHistory(historyData || {});
-
-        } catch (error) {
-            console.error("Gagal mengambil data awal:", error);
-            addNotification('Error', 'Gagal memuat data awal.', 'take_profit_loss');
-        }
-    };
-    getInitialData();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
-        try {
-            const response = await fetch('/api/accounts');
-            const data = await response.json();
-            if (data && typeof data === 'object') {
-                setAccountsData(data);
-            }
-        } catch (error) {
-            console.error("Gagal mengambil update data:", error);
-        }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const accounts = useMemo(() => {
-    const accountsArray = Object.values(accountsData);
-    if (accountOrder.length === 0) {
-        return accountsArray.sort((a, b) => a.accountName.localeCompare(b.accountName));
+  const showNotification = useCallback((title, options) => {
+    if (!isNotifEnabled || !("Notification" in window) || notifPermission !== "granted") {
+        return;
+    }
+    new Notification(title, options);
+  }, [isNotifEnabled, notifPermission]);
+  
+  const handleNotifToggle = () => {
+    if (!("Notification" in window)) {
+        alert("Browser ini tidak mendukung notifikasi desktop.");
+        return;
     }
 
-    const accountMap = new Map(accountsArray.map(acc => [String(acc.id), acc]));
-    const ordered = accountOrder
+    if (notifPermission === 'granted') {
+        setIsNotifEnabled(!isNotifEnabled);
+    } else if (notifPermission === 'denied') {
+        alert("Anda telah memblokir notifikasi. Mohon aktifkan melalui pengaturan browser.");
+    } else {
+        Notification.requestPermission().then(permission => {
+            setNotifPermission(permission);
+            if (permission === 'granted') {
+                setIsNotifEnabled(true);
+                addNotification('Sukses', 'Notifikasi berhasil diaktifkan.', 'take_profit_profit');
+            }
+        });
+    }
+  };
+
+  useEffect(() => {
+    const accountsRef = ref(db, 'accounts/');
+    const historyRef = ref(db, 'trade_history/');
+    const orderRef = ref(db, 'dashboard_config/accountOrder');
+
+    const unsubscribeAccounts = onValue(accountsRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        
+        if(initialLoadComplete.current) {
+            Object.values(data).forEach(acc => {
+                const prevPosTickets = new Set(prevPositionsRef.current[acc.accountId] || []);
+                const currentPositions = acc.positions || [];
+
+                currentPositions.forEach(pos => {
+                    if (!prevPosTickets.has(pos.ticket)) {
+                        const message = `Posisi ${pos.executionType} dibuka pada ${pos.pair} lot ${pos.lotSize.toFixed(2)}`;
+                        showNotification(`Aktivitas Baru: ${acc.accountName}`, { body: message, icon: '/logo192.png' });
+                        speak(message);
+                    }
+                });
+            });
+        }
+
+        const newPositions = {};
+        Object.values(data).forEach(acc => {
+            newPositions[acc.accountId] = (acc.positions || []).map(p => p.ticket);
+        });
+        prevPositionsRef.current = newPositions;
+        
+        if(!initialLoadComplete.current) {
+            initialLoadComplete.current = true;
+        }
+
+        setAccountsData(data);
+    });
+
+    const unsubscribeHistory = onValue(historyRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        setTradeHistory(data);
+    });
+
+    const unsubscribeOrder = onValue(orderRef, (snapshot) => {
+        const data = snapshot.val() || [];
+        setAccountOrder(data);
+    });
+
+    return () => {
+        unsubscribeAccounts();
+        unsubscribeHistory();
+        unsubscribeOrder();
+    };
+  }, [speak, showNotification]);
+
+  const accounts = useMemo(() => {
+    const allAccounts = Object.values(accountsData);
+    
+    if (accountOrder && accountOrder.length > 0) {
+      const accountMap = new Map(allAccounts.map(acc => [String(acc.id), acc]));
+      const orderedIdSet = new Set(accountOrder.map(id => String(id)));
+
+      const orderedList = accountOrder
         .map(id => accountMap.get(String(id)))
         .filter(Boolean);
+        
+      const unorderedList = allAccounts
+        .filter(acc => !orderedIdSet.has(String(acc.id)))
+        .sort((a, b) => a.accountName.localeCompare(b.accountName));
 
-    const newAccounts = accountsArray.filter(acc => !accountOrder.includes(acc.id));
-   
-    return [...ordered, ...newAccounts];
+      return [...orderedList, ...unorderedList];
+    }
+
+    return allAccounts.sort((a, b) => a.accountName.localeCompare(b.accountName));
   }, [accountsData, accountOrder]);
 
 
   const handleToggleRobot = async (accountId, newStatus) => {
-    setAccountsData(prev => ({
-        ...prev,
-        [accountId]: { ...prev[accountId], robotStatus: newStatus }
-    }));
     try {
         await fetch('/api/robot-toggle', {
             method: 'POST',
@@ -384,14 +431,6 @@ export default function App() {
   const handleDeleteAccount = async () => {
     const { accountId, accountName } = deleteModal;
     if (!accountId) return;
-
-    setAccountsData(prev => {
-        const newData = { ...prev };
-        delete newData[accountId];
-        return newData;
-    });
-    closeDeleteModal();
-
     try {
         await fetch('/api/delete-account', {
             method: 'POST',
@@ -402,19 +441,7 @@ export default function App() {
     } catch (error) {
         addNotification('Error', 'Gagal menghapus akun. Mohon refresh halaman.', 'take_profit_loss');
     }
-  };
-
-  const handleCancelOrder = async (accountId, ticket) => {
-    addNotification('Perintah Terkirim', `Mencoba membatalkan order tiket ${ticket}...`, 'default');
-    try {
-        await fetch('/api/cancel-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accountId, ticket })
-        });
-    } catch (error) {
-        addNotification('Error', 'Gagal mengirim perintah pembatalan.', 'take_profit_loss');
-    }
+    closeDeleteModal();
   };
 
   const handleDragStart = (e, pos) => {
@@ -438,7 +465,7 @@ export default function App() {
     const dragItemContent = reorderedAccounts[dragItem.current];
     reorderedAccounts.splice(dragItem.current, 1);
     reorderedAccounts.splice(dragOverItem.current, 0, dragItemContent);
-   
+    
     const newOrderIds = reorderedAccounts.map(acc => acc.id);
     setAccountOrder(newOrderIds);
 
@@ -472,32 +499,40 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
       `}</style>
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8 flex justify-between items-center border-b border-slate-700 pb-4">
+        <header className="mb-4 flex flex-wrap justify-between items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white">MJA Monitoring Dashboard</h1>
             <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
           </div>
-          {page === 'dashboard' ? (
-            <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
-                <History size={20} />
-                <span>Lihat Riwayat</span>
+          <div className="flex items-center gap-4">
+            <button onClick={handleNotifToggle} title="Notifikasi Browser" className={`p-2 rounded-lg transition-colors ${isNotifEnabled && notifPermission === 'granted' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'} ${notifPermission === 'denied' ? 'text-red-500' : ''}`}>
+              <BellRing size={20} />
             </button>
-          ) : (
-            <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
-                <ArrowLeft size={20} />
-                <span>Kembali ke Dashboard</span>
+            <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} title="Pemberitahuan Suara" className={`p-2 rounded-lg transition-colors ${isSoundEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>
+                {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
-          )}
+            {page === 'dashboard' ? (
+              <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
+                  <History size={20} />
+                  <span>Lihat Riwayat</span>
+              </button>
+            ) : (
+              <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
+                  <ArrowLeft size={20} />
+                  <span>Kembali</span>
+              </button>
+            )}
+          </div>
         </header>
 
-        <main>
+        <main className="border-t border-slate-700 pt-8">
             {page === 'dashboard' ? (
                 <>
                   <div className="mb-6 relative">
                     <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800/70 backdrop-blur-sm border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                   </div>
-                 
+                  
                   <SummaryDashboard accounts={accounts} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                       {filteredAccounts.map((account, index) => (
@@ -506,7 +541,6 @@ export default function App() {
                               account={account}
                               onToggleRobot={handleToggleRobot}
                               onDelete={openDeleteModal}
-                              handleCancelOrder={handleCancelOrder}
                               index={index}
                               handleDragStart={handleDragStart}
                               handleDragEnter={handleDragEnter}
