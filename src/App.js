@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, Volume2, VolumeX, BellRing, XCircle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue } from "firebase/database";
+import { getDatabase, ref, onValue, set, remove } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
 
 // Inisialisasi Firebase
@@ -13,6 +13,18 @@ const formatCurrency = (value, includeSign = true) => {
   const absValue = Math.abs(value);
   const sign = value < 0 ? '-' : (includeSign ? '+' : '');
   return `${sign}$${absValue.toFixed(2)}`;
+};
+
+// Fungsi untuk mengeja angka
+const formatNumberForSpeech = (num) => {
+  const numStr = String(num);
+  const parts = numStr.split('.');
+  const integerPart = parts[0].split('').join(' ');
+  if (parts.length > 1) {
+    const decimalPart = parts[1].split('').join(' ');
+    return `${integerPart} koma ${decimalPart}`;
+  }
+  return integerPart;
 };
 
 // --- React Components ---
@@ -113,7 +125,7 @@ const SummaryDashboard = ({ accounts }) => {
   );
 };
 
-const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
+const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
   const totalPL = useMemo(() => (account.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0), [account.positions]);
   const isProfitable = totalPL > 0;
   
@@ -174,9 +186,14 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 <div className="flex flex-col justify-start items-end">
                     <p className="text-slate-500 text-xs mb-1">Status</p>
                      {isSingleItemPending ? 
-                        <div className="text-right"><p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p></div> :
+                        <div className="flex items-center gap-x-2">
+                            <p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-1"/> Pending</p>
+                            <button onClick={(e) => { e.stopPropagation(); handleCancelOrder(account.accountId, singleItem.ticket); }} title="Batalkan Order" className="text-slate-500 hover:text-red-500 transition-colors">
+                                <XCircle size={18} />
+                            </button>
+                        </div> :
                         <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
-                    }
+                     }
                 </div>
             </div>
           )}
@@ -192,11 +209,16 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 </div>
               ))}
               {(account.orders || []).map(ord => (
-                 <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                    <div>{getTypePill(ord.executionType)}</div>
-                    <div className="text-slate-300 font-semibold">{ord.pair}</div>
-                    <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
-                    <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
+                   <div key={ord.ticket} className="grid grid-cols-5 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                    <div className="col-span-1">{getTypePill(ord.executionType)}</div>
+                    <div className="col-span-1 text-slate-300 font-semibold">{ord.pair}</div>
+                    <div className="col-span-1 text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
+                    <div className="col-span-1 text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
+                    <div className="col-span-1 flex justify-end">
+                        <button onClick={(e) => { e.stopPropagation(); handleCancelOrder(account.accountId, ord.ticket); }} title="Batalkan Order" className="text-slate-500 hover:text-red-500 transition-colors">
+                            <XCircle size={16} />
+                        </button>
+                    </div>
                 </div>
               ))}
             </div>
@@ -348,9 +370,17 @@ export default function App() {
 
                 currentPositions.forEach(pos => {
                     if (!prevPosTickets.has(pos.ticket)) {
-                        const message = `Posisi ${pos.executionType} dibuka pada ${pos.pair} lot ${pos.lotSize.toFixed(2)}`;
-                        showNotification(`Aktivitas Baru: ${acc.accountName}`, { body: message, icon: '/logo192.png' });
-                        speak(message);
+                        const executionType = pos.executionType.replace('_', ' ');
+                        const capitalizedType = executionType.charAt(0).toUpperCase() + executionType.slice(1);
+                        
+                        const messageForNotification = `${capitalizedType} ${pos.pair} di Akun ${acc.accountName} dengan Lot ${pos.lotSize.toFixed(2)} di harga @${pos.entryPrice}`;
+                        
+                        const lotForSpeech = formatNumberForSpeech(pos.lotSize.toFixed(2));
+                        const priceForSpeech = formatNumberForSpeech(pos.entryPrice);
+                        const messageForSpeech = `${capitalizedType} di Akun ${acc.accountName} dengan Lot ${lotForSpeech} di harga ${priceForSpeech}`;
+
+                        showNotification(`Aktivitas Baru: ${acc.accountName}`, { body: messageForNotification, icon: '/logo192.png' });
+                        speak(messageForSpeech);
                     }
                 });
             });
@@ -410,11 +440,7 @@ export default function App() {
 
   const handleToggleRobot = async (accountId, newStatus) => {
     try {
-        await fetch('/api/robot-toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accountId, newStatus })
-        });
+        await set(ref(db, `commands/${accountId}`), { command: 'toggle_robot', status: newStatus });
     } catch (error) {
         addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
     }
@@ -432,16 +458,26 @@ export default function App() {
     const { accountId, accountName } = deleteModal;
     if (!accountId) return;
     try {
-        await fetch('/api/delete-account', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accountId })
-        });
+        await remove(ref(db, `accounts/${accountId}`));
+        await remove(ref(db, `commands/${accountId}`));
         addNotification('Sukses', `Akun ${accountName} telah dihapus.`, 'take_profit_profit');
     } catch (error) {
         addNotification('Error', 'Gagal menghapus akun. Mohon refresh halaman.', 'take_profit_loss');
     }
     closeDeleteModal();
+  };
+  
+  const handleCancelOrder = async (accountId, ticket) => {
+    addNotification('Perintah Terkirim', `Mencoba membatalkan order tiket ${ticket}...`, 'default');
+    try {
+        await fetch('/api/cancel-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId, ticket })
+        });
+    } catch (error) {
+        addNotification('Error', 'Gagal mengirim perintah pembatalan.', 'take_profit_loss');
+    }
   };
 
   const handleDragStart = (e, pos) => {
@@ -474,11 +510,7 @@ export default function App() {
     setDragging(false);
 
     try {
-        await fetch('/api/save-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order: newOrderIds })
-        });
+        await set(ref(db, 'dashboard_config/accountOrder'), newOrderIds);
         addNotification('Sukses', 'Urutan kartu telah disimpan.', 'take_profit_profit');
     } catch (error) {
         addNotification('Error', 'Gagal menyimpan urutan kartu.', 'take_profit_loss');
@@ -541,6 +573,7 @@ export default function App() {
                               account={account}
                               onToggleRobot={handleToggleRobot}
                               onDelete={openDeleteModal}
+                              handleCancelOrder={handleCancelOrder}
                               index={index}
                               handleDragStart={handleDragStart}
                               handleDragEnter={handleDragEnter}
