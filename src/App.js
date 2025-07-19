@@ -1,30 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-// PERBAIKAN: Menambahkan semua ikon yang diperlukan
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu, Volume2, VolumeX, BellRing, XCircle, BarChart2, Users, Target, Zap, Percent } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, remove } from "firebase/database";
+import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Helper functions
+// Helper function
 const formatCurrency = (value, includeSign = true) => {
   const absValue = Math.abs(value);
   const sign = value < 0 ? '-' : (includeSign ? '+' : '');
   return `${sign}$${absValue.toFixed(2)}`;
-};
-
-const formatNumberForSpeech = (num) => {
-  const numStr = String(num);
-  const parts = numStr.split('.');
-  const integerPart = parts[0].split('').join(' ');
-  if (parts.length > 1) {
-    const decimalPart = parts[1].split('').join(' ');
-    return `${integerPart} koma ${decimalPart}`;
-  }
-  return integerPart;
 };
 
 // --- React Components ---
@@ -125,7 +113,7 @@ const SummaryDashboard = ({ accounts }) => {
   );
 };
 
-const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
+const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
   const totalPL = useMemo(() => (account.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0), [account.positions]);
   const isProfitable = totalPL > 0;
   
@@ -162,13 +150,8 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
                 <Power size={18} className={`${account.robotStatus === 'on' ? 'text-green-500' : 'text-slate-500'} transition-colors`} />
               </button>
             </div>
-            {account.tradingRobotName && (
-                <div className="flex items-center gap-x-2 text-sm text-cyan-400 mb-2">
-                    <Cpu size={16} />
-                    <span>{account.tradingRobotName}</span>
-                </div>
-            )}
-            {totalActivities > 1 && <p className={`text-xl font-bold ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
+            {account.tradingRobotName && <p className="text-xs text-cyan-400 -mt-1">{account.tradingRobotName}</p>}
+            {totalActivities > 1 && <p className={`text-xl font-bold mt-1 ${isProfitable ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalPL)}</p>}
           </div>
           {totalActivities === 1 && singleItem && (
             <div className="flex-shrink-0">{getTypePill(singleItem.executionType)}</div>
@@ -191,14 +174,9 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
                 <div className="flex flex-col justify-start items-end">
                     <p className="text-slate-500 text-xs mb-1">Status</p>
                      {isSingleItemPending ? 
-                        <div className="flex items-center gap-x-2">
-                            <p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-1"/> Pending</p>
-                            <button onClick={(e) => { e.stopPropagation(); handleCancelOrder(account.accountId, singleItem.ticket); }} title="Batalkan Order" className="text-slate-500 hover:text-red-500 transition-colors">
-                                <XCircle size={18} />
-                            </button>
-                        </div> :
+                        <div className="text-right"><p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p></div> :
                         <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
-                     }
+                    }
                 </div>
             </div>
           )}
@@ -214,16 +192,11 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleCancelOrder, hand
                 </div>
               ))}
               {(account.orders || []).map(ord => (
-                   <div key={ord.ticket} className="grid grid-cols-5 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                    <div className="col-span-1">{getTypePill(ord.executionType)}</div>
-                    <div className="col-span-1 text-slate-300 font-semibold">{ord.pair}</div>
-                    <div className="col-span-1 text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
-                    <div className="col-span-1 text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
-                    <div className="col-span-1 flex justify-end">
-                        <button onClick={(e) => { e.stopPropagation(); handleCancelOrder(account.accountId, ord.ticket); }} title="Batalkan Order" className="text-slate-500 hover:text-red-500 transition-colors">
-                            <XCircle size={16} />
-                        </button>
-                    </div>
+                 <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                    <div>{getTypePill(ord.executionType)}</div>
+                    <div className="text-slate-300 font-semibold">{ord.pair}</div>
+                    <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
+                    <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
                 </div>
               ))}
             </div>
@@ -299,112 +272,6 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
     );
 };
 
-// --- KOMPONEN HALAMAN BARU ---
-const EAOverviewPage = ({ accounts, tradeHistory }) => {
-    const robotStats = useMemo(() => {
-        const robots = {};
-        const allHistory = Object.values(tradeHistory).flat();
-
-        accounts.forEach(acc => {
-            const robotName = acc.tradingRobotName || "Unknown Robot";
-            if (!robots[robotName]) {
-                robots[robotName] = { accounts: new Set(), positions: [] };
-            }
-            robots[robotName].accounts.add(acc.accountId);
-            if (acc.positions) {
-                robots[robotName].positions.push(...acc.positions);
-            }
-        });
-
-        return Object.keys(robots).map(robotName => {
-            const robotTrades = allHistory.filter(trade => trade.accountName && accounts.find(acc => acc.accountName === trade.accountName)?.tradingRobotName === robotName);
-            const winningTrades = robotTrades.filter(trade => parseFloat(trade.pl) >= 0).length;
-            const winrate = robotTrades.length > 0 ? ((winningTrades / robotTrades.length) * 100).toFixed(1) : 0;
-
-            return {
-                name: robotName,
-                stats: {
-                    accountsReach: robots[robotName].accounts.size,
-                    currentFloating: robots[robotName].positions.reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0),
-                    weeklyTrades: robotTrades.length,
-                    winrate: winrate
-                }
-            };
-        });
-    }, [accounts, tradeHistory]);
-
-    return (
-        <div className="animate-fade-in">
-            <h2 className="text-2xl font-bold text-white mb-6">Kinerja EA Overview</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {robotStats.map(robotData => <RobotCard key={robotData.name} robotData={robotData} />)}
-            </div>
-        </div>
-    );
-};
-
-// PERBAIKAN: Menambahkan komponen RobotStat yang hilang
-const RobotStat = ({ icon, label, value }) => (
-    <div className="flex items-center space-x-3">
-        <div className="text-slate-400">{icon}</div>
-        <div>
-            <p className="text-xs text-slate-500">{label}</p>
-            <p className="font-semibold text-white">{value}</p>
-        </div>
-    </div>
-);
-
-const RobotCard = ({ robotData }) => {
-    const [activeTab, setActiveTab] = useState('performance');
-    const { name, stats } = robotData;
-
-    const TabButton = ({ tabName, label }) => (
-        <button 
-            onClick={() => setActiveTab(tabName)}
-            className={`px-3 py-1 text-sm rounded-md transition-colors ${activeTab === tabName ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}
-        >
-            {label}
-        </button>
-    );
-
-    return (
-        <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col">
-            <div className="p-4 border-b border-slate-700">
-                <h3 className="text-lg font-bold text-white flex items-center gap-x-2"><Cpu size={20} className="text-cyan-400"/> {name}</h3>
-            </div>
-            <div className="p-4">
-                <div className="flex space-x-2 border-b border-slate-700 pb-4 mb-4 overflow-x-auto">
-                    <TabButton tabName="performance" label="Kinerja" />
-                    <TabButton tabName="equity" label="Kurva Ekuitas" />
-                    <TabButton tabName="drawdown" label="Drawdown" />
-                    <TabButton tabName="duration" label="Durasi Trade" />
-                </div>
-                <div>
-                    {activeTab === 'performance' && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <RobotStat icon={<Users size={20}/>} label="Jangkauan Akun" value={stats.accountsReach} />
-                            <RobotStat icon={<Zap size={20}/>} label="Floating Saat Ini" value={formatCurrency(stats.currentFloating, false)} />
-                            <RobotStat icon={<Target size={20}/>} label="Trade Mingguan" value={stats.weeklyTrades} />
-                            <RobotStat icon={<Percent size={20}/>} label="Winrate" value={`${stats.winrate}%`} />
-                        </div>
-                    )}
-                    {activeTab === 'equity' && <PlaceholderContent title="Grafik Pertumbuhan Ekuitas" />}
-                    {activeTab === 'drawdown' && <PlaceholderContent title="Rasio Drawdown" />}
-                    {activeTab === 'duration' && <PlaceholderContent title="Rasio Durasi Trade" />}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const PlaceholderContent = ({ title }) => (
-    <div className="text-center p-8 text-slate-500">
-        <BarChart2 size={32} className="mx-auto mb-2" />
-        <p className="font-semibold">{title}</p>
-        <p className="text-xs">Data untuk fitur ini akan ditambahkan di update selanjutnya.</p>
-    </div>
-);
-
 
 // Main App Component
 export default function App() {
@@ -426,24 +293,197 @@ export default function App() {
   const dragOverItem = useRef(null);
   const [dragging, setDragging] = useState(false);
 
-  const addNotification = (title, message, type) => { /* ... (fungsi tetap sama) ... */ };
-  const removeNotification = (id) => { /* ... (fungsi tetap sama) ... */ };
-  const speak = useCallback((text) => { /* ... (fungsi tetap sama) ... */ }, [isSoundEnabled]);
-  const showNotification = useCallback((title, options) => { /* ... (fungsi tetap sama) ... */ }, [isNotifEnabled, notifPermission]);
-  const handleNotifToggle = () => { /* ... (fungsi tetap sama) ... */ };
+  const addNotification = (title, message, type) => {
+    setNotifications(prev => [{ id: Date.now(), title, message, type }, ...prev].slice(0, 5));
+  };
+  const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
+  
+  const speak = useCallback((text) => {
+    if (!isSoundEnabled || !window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'id-ID';
+    window.speechSynthesis.speak(utterance);
+  }, [isSoundEnabled]);
 
-  useEffect(() => { /* ... (useEffect untuk listener tetap sama) ... */ }, [speak, showNotification]);
+  const showNotification = useCallback((title, options) => {
+    if (!isNotifEnabled || !("Notification" in window) || notifPermission !== "granted") {
+        return;
+    }
+    new Notification(title, options);
+  }, [isNotifEnabled, notifPermission]);
+  
+  const handleNotifToggle = () => {
+    if (!("Notification" in window)) {
+        alert("Browser ini tidak mendukung notifikasi desktop.");
+        return;
+    }
 
-  const accounts = useMemo(() => { /* ... (useMemo untuk accounts tetap sama) ... */ }, [accountsData, accountOrder]);
+    if (notifPermission === 'granted') {
+        setIsNotifEnabled(!isNotifEnabled);
+    } else if (notifPermission === 'denied') {
+        alert("Anda telah memblokir notifikasi. Mohon aktifkan melalui pengaturan browser.");
+    } else {
+        Notification.requestPermission().then(permission => {
+            setNotifPermission(permission);
+            if (permission === 'granted') {
+                setIsNotifEnabled(true);
+                addNotification('Sukses', 'Notifikasi berhasil diaktifkan.', 'take_profit_profit');
+            }
+        });
+    }
+  };
 
-  const handleToggleRobot = async (accountId, newStatus) => { /* ... (fungsi tetap sama) ... */ };
-  const openDeleteModal = (accountId, accountName) => { /* ... (fungsi tetap sama) ... */ };
-  const closeDeleteModal = () => { /* ... (fungsi tetap sama) ... */ };
-  const handleDeleteAccount = async () => { /* ... (fungsi tetap sama) ... */ };
-  const handleCancelOrder = async (accountId, ticket) => { /* ... (fungsi tetap sama) ... */ };
-  const handleDragStart = (e, pos) => { /* ... (fungsi tetap sama) ... */ };
-  const handleDragEnter = (e, pos) => { /* ... (fungsi tetap sama) ... */ };
-  const handleDragEnd = async () => { /* ... (fungsi tetap sama) ... */ };
+  useEffect(() => {
+    const accountsRef = ref(db, 'accounts/');
+    const historyRef = ref(db, 'trade_history/');
+    const orderRef = ref(db, 'dashboard_config/accountOrder');
+
+    const unsubscribeAccounts = onValue(accountsRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        
+        if(initialLoadComplete.current) {
+            Object.values(data).forEach(acc => {
+                const prevPosTickets = new Set(prevPositionsRef.current[acc.accountId] || []);
+                const currentPositions = acc.positions || [];
+
+                currentPositions.forEach(pos => {
+                    if (!prevPosTickets.has(pos.ticket)) {
+                        const message = `Posisi ${pos.executionType} dibuka pada ${pos.pair} lot ${pos.lotSize.toFixed(2)}`;
+                        showNotification(`Aktivitas Baru: ${acc.accountName}`, { body: message, icon: '/logo192.png' });
+                        speak(message);
+                    }
+                });
+            });
+        }
+
+        const newPositions = {};
+        Object.values(data).forEach(acc => {
+            newPositions[acc.accountId] = (acc.positions || []).map(p => p.ticket);
+        });
+        prevPositionsRef.current = newPositions;
+        
+        if(!initialLoadComplete.current) {
+            initialLoadComplete.current = true;
+        }
+
+        setAccountsData(data);
+    });
+
+    const unsubscribeHistory = onValue(historyRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        setTradeHistory(data);
+    });
+
+    const unsubscribeOrder = onValue(orderRef, (snapshot) => {
+        const data = snapshot.val() || [];
+        setAccountOrder(data);
+    });
+
+    return () => {
+        unsubscribeAccounts();
+        unsubscribeHistory();
+        unsubscribeOrder();
+    };
+  }, [speak, showNotification]);
+
+  const accounts = useMemo(() => {
+    const allAccounts = Object.values(accountsData);
+    
+    if (accountOrder && accountOrder.length > 0) {
+      const accountMap = new Map(allAccounts.map(acc => [String(acc.id), acc]));
+      const orderedIdSet = new Set(accountOrder.map(id => String(id)));
+
+      const orderedList = accountOrder
+        .map(id => accountMap.get(String(id)))
+        .filter(Boolean);
+        
+      const unorderedList = allAccounts
+        .filter(acc => !orderedIdSet.has(String(acc.id)))
+        .sort((a, b) => a.accountName.localeCompare(b.accountName));
+
+      return [...orderedList, ...unorderedList];
+    }
+
+    return allAccounts.sort((a, b) => a.accountName.localeCompare(b.accountName));
+  }, [accountsData, accountOrder]);
+
+
+  const handleToggleRobot = async (accountId, newStatus) => {
+    try {
+        await fetch('/api/robot-toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId, newStatus })
+        });
+    } catch (error) {
+        addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
+    }
+  };
+
+  const openDeleteModal = (accountId, accountName) => {
+    setDeleteModal({ isOpen: true, accountId, accountName });
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({ isOpen: false, accountId: null, accountName: '' });
+  };
+
+  const handleDeleteAccount = async () => {
+    const { accountId, accountName } = deleteModal;
+    if (!accountId) return;
+    try {
+        await fetch('/api/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId })
+        });
+        addNotification('Sukses', `Akun ${accountName} telah dihapus.`, 'take_profit_profit');
+    } catch (error) {
+        addNotification('Error', 'Gagal menghapus akun. Mohon refresh halaman.', 'take_profit_loss');
+    }
+    closeDeleteModal();
+  };
+
+  const handleDragStart = (e, pos) => {
+    dragItem.current = pos;
+    setDragging(true);
+  };
+
+  const handleDragEnter = (e, pos) => {
+    dragOverItem.current = pos;
+  };
+
+  const handleDragEnd = async () => {
+    if (dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+      setDragging(false);
+      dragItem.current = null;
+      dragOverItem.current = null;
+      return;
+    }
+
+    const reorderedAccounts = [...accounts];
+    const dragItemContent = reorderedAccounts[dragItem.current];
+    reorderedAccounts.splice(dragItem.current, 1);
+    reorderedAccounts.splice(dragOverItem.current, 0, dragItemContent);
+    
+    const newOrderIds = reorderedAccounts.map(acc => acc.id);
+    setAccountOrder(newOrderIds);
+
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDragging(false);
+
+    try {
+        await fetch('/api/save-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: newOrderIds })
+        });
+        addNotification('Sukses', 'Urutan kartu telah disimpan.', 'take_profit_profit');
+    } catch (error) {
+        addNotification('Error', 'Gagal menyimpan urutan kartu.', 'take_profit_loss');
+    }
+  };
 
   const filteredAccounts = useMemo(() => {
     if (!searchTerm) return accounts;
@@ -472,16 +512,10 @@ export default function App() {
                 {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
             {page === 'dashboard' ? (
-              <div className="flex items-center gap-2">
-                  <button onClick={() => setPage('ea_overview')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
-                      <Cpu size={20} />
-                      <span>EA Overview</span>
-                  </button>
-                  <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
-                      <History size={20} />
-                      <span>Riwayat</span>
-                  </button>
-              </div>
+              <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
+                  <History size={20} />
+                  <span>Lihat Riwayat</span>
+              </button>
             ) : (
               <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
                   <ArrowLeft size={20} />
@@ -492,7 +526,7 @@ export default function App() {
         </header>
 
         <main className="border-t border-slate-700 pt-8">
-            {page === 'dashboard' && (
+            {page === 'dashboard' ? (
                 <>
                   <div className="mb-6 relative">
                     <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800/70 backdrop-blur-sm border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -507,7 +541,6 @@ export default function App() {
                               account={account}
                               onToggleRobot={handleToggleRobot}
                               onDelete={openDeleteModal}
-                              handleCancelOrder={handleCancelOrder}
                               index={index}
                               handleDragStart={handleDragStart}
                               handleDragEnter={handleDragEnter}
@@ -517,9 +550,9 @@ export default function App() {
                       ))}
                   </div>
                 </>
+            ) : (
+                <HistoryPage accounts={accounts} tradeHistory={tradeHistory} />
             )}
-            {page === 'history' && <HistoryPage accounts={accounts} tradeHistory={tradeHistory} />}
-            {page === 'ea_overview' && <EAOverviewPage accounts={accounts} tradeHistory={tradeHistory} />}
         </main>
       </div>
       <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
