@@ -5,6 +5,18 @@ import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+// --- KONFIGURASI FIREBASE ---
+// Ganti dengan konfigurasi Firebase Realtime Database Anda.
+const firebaseConfig = {
+  apiKey: "AIzaSyCdaA-CsdyY1fblY8j3082_pUk2hCivJBA",
+  authDomain: "dashboard-mt.firebaseapp.com",
+  databaseURL: "https://dashboard-mt-default-rtdb.firebaseio.com",
+  projectId: "dashboard-mt",
+  storageBucket: "dashboard-mt.firebasestorage.app",
+  messagingSenderId: "343827230016",
+  appId: "1:343827230016:web:bb25bfb07daa696f8ddea5",
+};
+
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
