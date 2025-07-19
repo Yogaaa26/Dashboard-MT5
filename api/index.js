@@ -158,5 +158,127 @@ app.post('/api/cancel-order', express.json(), async (req, res) => {
     }
 });
 
+// --- ENDPOINT UTAMA UNTUK KALKULASI STATISTIK EA ---
+app.get('/api/calculate-ea-stats', async (req, res) => {
+    try {
+        if (!db) {
+            return res.status(500).send({ error: 'Koneksi database belum siap.' });
+        }
+
+        console.log("Memulai kalkulasi statistik EA...");
+
+        // 1. Ambil semua data mentah yang diperlukan
+        const accountsSnapshot = await db.ref('accounts').once('value');
+        const historySnapshot = await db.ref('trade_history').once('value');
+        const accountsData = accountsSnapshot.val() || {};
+        const historyData = historySnapshot.val() || {};
+
+        const eaStats = {};
+
+        // 2. Kelompokkan akun berdasarkan nama robot
+        for (const accountId in accountsData) {
+            const account = accountsData[accountId];
+            const robotName = account.tradingRobotName;
+
+            if (robotName && robotName !== "EA Trading Tidak Aktif") {
+                // Inisialisasi statistik untuk robot jika belum ada
+                if (!eaStats[robotName]) {
+                    eaStats[robotName] = {
+                        name: robotName,
+                        accounts: [],
+                        totalFloating: 0,
+                        history: [],
+                    };
+                }
+                eaStats[robotName].accounts.push(account);
+                
+                // Tambahkan riwayat transaksi akun ini ke robot yang sesuai
+                if(historyData[accountId]) {
+                    eaStats[robotName].history.push(...historyData[accountId]);
+                }
+            }
+        }
+
+        // 3. Lakukan kalkulasi untuk setiap robot
+        for (const robotName in eaStats) {
+            const stats = eaStats[robotName];
+            
+            // Kalkulasi: Accounts Reach
+            stats.accountsReach = stats.accounts.length;
+
+            // Kalkulasi: Current Floating
+            stats.totalFloating = stats.accounts.reduce((sum, acc) => {
+                const positionsPL = (acc.positions || []).reduce((posSum, pos) => posSum + (parseFloat(pos.profit) || 0), 0);
+                return sum + positionsPL;
+            }, 0);
+
+            // --- Kalkulasi berdasarkan riwayat ---
+            const history = stats.history;
+            const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+            let weeklyTrades = 0;
+            let totalProfitLoss = 0;
+            let profitableTrades = 0;
+            let totalDrawdown = 0;
+            let drawdownTrades = 0;
+            
+            history.forEach(trade => {
+                const closeTime = new Date(trade.closeDate.replace(/\./g, '-')).getTime();
+                if (closeTime > oneWeekAgo) {
+                    weeklyTrades++;
+                }
+
+                const pl = parseFloat(trade.pl) || 0;
+                totalProfitLoss += pl;
+                if (pl >= 0) {
+                    profitableTrades++;
+                } else {
+                    totalDrawdown += pl; // pl sudah negatif
+                    drawdownTrades++;
+                }
+            });
+
+            // Kalkulasi: Profit/Loss Average (dari total history)
+            stats.profitLoss = totalProfitLoss;
+            
+            // Kalkulasi: Weekly Trade Ratio
+            stats.weeklyTradeRatio = weeklyTrades;
+
+            // Kalkulasi: Drawdown Ratio (rata-rata kerugian per trade yang rugi)
+            stats.drawdownRatio = drawdownTrades > 0 ? totalDrawdown / drawdownTrades : 0;
+
+            // Kalkulasi: Winrate
+            stats.winrate = history.length > 0 ? (profitableTrades / history.length) * 100 : 0;
+            
+            // Kalkulasi: Equity Growth Curve (Contoh: snapshot harian selama 7 hari)
+            stats.equityCurve = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+                const dailyTotalPL = history.reduce((sum, trade) => {
+                    const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
+                    if (tradeDate <= date) {
+                        return sum + (parseFloat(trade.pl) || 0);
+                    }
+                    return sum;
+                }, 0);
+                stats.equityCurve.push({ date: date.toISOString().split('T')[0], equity: dailyTotalPL });
+            }
+            
+            // Hapus data mentah yang tidak perlu dikirim ke klien
+            delete stats.accounts;
+            delete stats.history;
+        }
+
+        // 4. Simpan hasil kalkulasi ke path /ea_stats/
+        await db.ref('ea_stats').set(eaStats);
+
+        console.log("Kalkulasi statistik EA selesai. Data tersimpan di /ea_stats/.");
+        res.status(200).json({ message: 'Kalkulasi statistik EA berhasil.', data: eaStats });
+
+    } catch (error) {
+        console.error('Error saat kalkulasi statistik EA:', error);
+        res.status(500).send({ error: 'Terjadi kesalahan di server saat kalkulasi.' });
+    }
+});
 
 module.exports = app;

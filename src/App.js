@@ -15,6 +15,7 @@ const formatCurrency = (value, includeSign = true) => {
   return `${sign}$${absValue.toFixed(2)}`;
 };
 
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 // --- React Components ---
 
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
@@ -272,120 +273,143 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
     );
 };
 
-// --- KOMPONEN BARU UNTUK EA OVERVIEW ---
+// --- KOMPONEN BARU YANG LEBIH CANGGIH UNTUK EA OVERVIEW ---
 
-// Komponen untuk menampilkan satu kartu EA
-const EACard = ({ ea }) => {
-  const { name, status, profit, winRate, totalTrades, runningSince } = ea;
-  const isProfit = profit >= 0;
+// Komponen Kartu EA dengan Tab
+const EACard = ({ robotStats }) => {
+    const [activeTab, setActiveTab] = useState('overview');
+    const { name, accountsReach, profitLoss, totalFloating, weeklyTradeRatio, drawdownRatio, winrate, equityCurve } = robotStats;
 
-  const formattedProfit = useMemo(() => {
-     return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD', // Ganti jika perlu
-     }).format(profit);
-  }, [profit]);
+    const tabs = [
+        { id: 'overview', label: 'Ringkasan' },
+        { id: 'performance', label: 'Kinerja' },
+        { id: 'chart', label: 'Grafik' },
+    ];
 
-  return (
-    <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-slate-700 transform hover:scale-105 transition-transform duration-300 flex flex-col">
-      {/* Header Kartu */}
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-bold text-white">{name}</h3>
-        <div className={`flex items-center px-3 py-1 rounded-full text-sm font-semibold ${status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-          {status === 'active' ? <CheckCircle2 size={16} className="mr-2" /> : <XCircle size={16} className="mr-2" />}
-          {status === 'active' ? 'Aktif' : 'Tidak Aktif'}
+    const isProfit = profitLoss >= 0;
+    const isFloatingProfit = totalFloating >= 0;
+
+    return (
+        <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300">
+            <div className="p-4 border-b border-slate-700">
+                <h3 className="text-xl font-bold text-white">{name}</h3>
+            </div>
+            <div className="flex-grow p-4">
+                {activeTab === 'overview' && (
+                    <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                        <SummaryStat icon={<Briefcase size={20} className="text-blue-400"/>} title="Handle Akun" value={accountsReach} />
+                        <SummaryStat icon={<DollarSign size={20} className={isFloatingProfit ? "text-green-400" : "text-red-400"}/>} title="Total Floating" value={formatCurrency(totalFloating, false)} colorClass={isFloatingProfit ? 'text-green-400' : 'text-red-400'}/>
+                    </div>
+                )}
+                {activeTab === 'performance' && (
+                     <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                        <SummaryStat icon={<TrendingUp size={20} className={isProfit ? "text-green-400" : "text-red-400"}/>} title="Total P/L" value={formatCurrency(profitLoss, false)} colorClass={isProfit ? 'text-green-400' : 'text-red-400'}/>
+                        <SummaryStat icon={<CheckCircle size={20} className="text-cyan-400"/>} title="Winrate" value={`${(winrate || 0).toFixed(1)}%`} />
+                        <SummaryStat icon={<List size={20} className="text-indigo-400"/>} title="Trade/Minggu" value={weeklyTradeRatio} />
+                        <SummaryStat icon={<TrendingDown size={20} className="text-yellow-400"/>} title="Avg. Drawdown" value={formatCurrency(drawdownRatio, false)} />
+                    </div>
+                )}
+                {activeTab === 'chart' && (
+                    <div className="h-48 w-full animate-fade-in">
+                        <p className="text-sm text-slate-400 mb-2">Kurva Pertumbuhan Ekuitas (7 Hari)</p>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={equityCurve} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tick={{ fill: '#94a3b8' }} />
+                                <YAxis stroke="#94a3b8" fontSize={10} tick={{ fill: '#94a3b8' }} tickFormatter={(value) => `$${value}`} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} labelStyle={{ color: '#cbd5e1' }} />
+                                <Line type="monotone" dataKey="equity" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
+            </div>
+            <div className="border-t border-slate-700 p-2 flex justify-center space-x-2 bg-slate-900/50 rounded-b-xl">
+                {tabs.map(tab => (
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-1 text-sm font-semibold rounded-lg transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
         </div>
-      </div>
-
-      {/* Statistik Kinerja */}
-      <div className="grid grid-cols-2 gap-4 text-slate-300">
-        <SummaryStat 
-            icon={isProfit ? <TrendingUp size={24} className="text-green-400" /> : <TrendingDown size={24} className="text-red-400" />}
-            title="Profit/Loss"
-            value={formattedProfit}
-            colorClass={isProfit ? 'text-green-400' : 'text-red-400'}
-        />
-         <SummaryStat 
-            icon={<CheckCircle size={24} className="text-blue-400" />}
-            title="Win Rate"
-            value={`${winRate}%`}
-        />
-        <SummaryStat 
-            icon={<List size={24} className="text-indigo-400" />}
-            title="Total Trades"
-            value={totalTrades}
-        />
-        <SummaryStat 
-            icon={<Clock size={24} className="text-yellow-400" />}
-            title="Aktif Sejak"
-            value={runningSince}
-        />
-      </div>
-    </div>
-  );
+    );
 };
+
 
 // Komponen Utama untuk EA Overview
 const EAOverview = () => {
-  const [eaData, setEaData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+    const [eaStats, setEaStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [isCalculating, setIsCalculating] = useState(false);
+    const [error, setError] = useState(null);
 
-  useEffect(() => {
-    // Pastikan path ini benar: 'ea_performance'
-    const eaDataRef = ref(db, 'ea_performance');
+    const fetchStats = useCallback(() => {
+        const statsRef = ref(db, 'ea_stats');
+        const unsubscribe = onValue(statsRef, (snapshot) => {
+            if (snapshot.exists()) {
+                setEaStats(Object.values(snapshot.val()));
+                setError(null);
+            } else {
+                 setError("Belum ada statistik yang dihitung. Klik 'Hitung Ulang Statistik' untuk memulai.");
+                 setEaStats(null);
+            }
+            setLoading(false);
+        }, (err) => {
+            console.error("Firebase read failed: ", err);
+            setError("Gagal mengambil data dari Firebase.");
+            setLoading(false);
+        });
+        return unsubscribe;
+    }, []);
 
-    const unsubscribe = onValue(eaDataRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const dataArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
-        })).sort((a,b) => a.name.localeCompare(b.name));
-        
-        setEaData(dataArray);
+    useEffect(() => {
+        const unsubscribe = fetchStats();
+        return () => unsubscribe();
+    }, [fetchStats]);
+
+    const handleCalculateStats = async () => {
+        setIsCalculating(true);
         setError(null);
-      } else {
-        setError("Data EA tidak ditemukan. Pastikan path 'ea_performance' di database benar dan ada data di dalamnya.");
-        setEaData(null);
-      }
-      setLoading(false);
-    }, (err) => {
-      console.error("Firebase read failed: ", err);
-      setError("Gagal mengambil data dari Firebase. Cek koneksi dan konfigurasi Anda.");
-      setLoading(false);
-    });
+        try {
+            const response = await fetch('/api/calculate-ea-stats');
+            if(!response.ok) {
+                throw new Error('Gagal memicu kalkulasi di server.');
+            }
+            // Data akan otomatis terupdate oleh listener onValue, jadi tidak perlu melakukan apa-apa di sini.
+            // Cukup tampilkan notifikasi sukses jika perlu.
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsCalculating(false);
+        }
+    };
 
-    return () => unsubscribe();
-  }, []);
+    return (
+        <div className="animate-fade-in">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-2xl font-bold text-white">Global EA Overview</h2>
+                    <p className="text-slate-400">Statistik kinerja terpusat untuk semua robot trading Anda.</p>
+                </div>
+                <button onClick={handleCalculateStats} disabled={isCalculating} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-all duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed">
+                    {isCalculating ? <Loader className="animate-spin" size={20} /> : <Activity size={20} />}
+                    <span>{isCalculating ? 'Menghitung...' : 'Hitung Ulang Statistik'}</span>
+                </button>
+            </div>
+            
+            {loading && <div className="text-center py-10">Memuat data...</div>}
+            
+            {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-lg text-center mb-6">{error}</div>}
 
-  return (
-    <div className="animate-fade-in">
-      <h2 className="text-2xl font-bold text-white mb-4">Kinerja EA/Robot</h2>
-      <p className="text-slate-400 mb-8">Monitor kinerja semua EA/Robot trading Anda secara real-time.</p>
-
-      {loading && (
-        <div className="flex justify-center items-center h-64">
-          <Loader className="animate-spin text-blue-500" size={48} />
-          <p className="ml-4 text-lg">Memuat data kinerja EA...</p>
+            {!loading && eaStats && (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {eaStats.map(stats => (
+                        <EACard key={stats.name} robotStats={stats} />
+                    ))}
+                </div>
+            )}
         </div>
-      )}
-
-      {error && (
-        <div className="bg-red-500/20 text-red-300 p-4 rounded-lg text-center">
-          <p>{error}</p>
-        </div>
-      )}
-
-      {!loading && !error && eaData && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {eaData.map(ea => (
-            <EACard key={ea.id} ea={ea} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+    );
 };
 
 // Main App Component
