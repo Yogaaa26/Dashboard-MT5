@@ -3,6 +3,7 @@ import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
@@ -15,7 +16,6 @@ const formatCurrency = (value, includeSign = true) => {
   return `${sign}$${absValue.toFixed(2)}`;
 };
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 // --- React Components ---
 
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
