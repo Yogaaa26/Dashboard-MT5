@@ -275,6 +275,7 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
 
 // --- KOMPONEN BARU YANG LEBIH CANGGIH UNTUK EA OVERVIEW ---
 
+// Komponen Kartu EA dengan Tab
 const EACard = ({ robotStats }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const { name, accountsReach, profitLoss, totalFloating, weeklyTradeRatio, drawdownRatio, winrate, equityCurve } = robotStats;
@@ -293,7 +294,7 @@ const EACard = ({ robotStats }) => {
             <div className="p-4 border-b border-slate-700">
                 <h3 className="text-xl font-bold text-white">{name}</h3>
             </div>
-            <div className="flex-grow p-4 min-h-[180px]">
+            <div className="flex-grow p-4">
                 {activeTab === 'overview' && (
                     <div className="grid grid-cols-2 gap-4 animate-fade-in">
                         <SummaryStat icon={<Briefcase size={20} className="text-blue-400"/>} title="Handle Akun" value={accountsReach} />
@@ -309,15 +310,15 @@ const EACard = ({ robotStats }) => {
                     </div>
                 )}
                 {activeTab === 'chart' && (
-                    <div className="h-full w-full animate-fade-in">
+                    <div className="h-48 w-full animate-fade-in">
                         <p className="text-sm text-slate-400 mb-2">Kurva Pertumbuhan Ekuitas (7 Hari)</p>
-                        <ResponsiveContainer width="100%" height={120}>
-                            <LineChart data={equityCurve} margin={{ top: 5, right: 20, left: -15, bottom: 5 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={equityCurve} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                                 <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tick={{ fill: '#94a3b8' }} />
-                                <YAxis stroke="#94a3b8" fontSize={10} tick={{ fill: '#94a3b8' }} tickFormatter={(value) => `$${Math.round(value/1000)}k`} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} labelStyle={{ color: '#cbd5e1' }} formatter={(value) => formatCurrency(value, false)} />
-                                <Line type="monotone" dataKey="equity" stroke="#38bdf8" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />
+                                <YAxis stroke="#94a3b8" fontSize={10} tick={{ fill: '#94a3b8' }} tickFormatter={(value) => `$${value}`} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} labelStyle={{ color: '#cbd5e1' }} />
+                                <Line type="monotone" dataKey="equity" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -330,87 +331,6 @@ const EACard = ({ robotStats }) => {
                     </button>
                 ))}
             </div>
-        </div>
-    );
-};
-
-const EAOverview = ({ addNotification }) => {
-    const [eaStats, setEaStats] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [isCalculating, setIsCalculating] = useState(false);
-    const [error, setError] = useState(null);
-
-    const fetchStats = useCallback(() => {
-        const statsRef = ref(db, 'ea_stats');
-        const unsubscribe = onValue(statsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                setEaStats(Object.values(snapshot.val()));
-                setError(null);
-            } else {
-                 setError("Belum ada statistik yang dihitung. Klik 'Hitung Ulang Statistik' untuk memulai.");
-                 setEaStats(null);
-            }
-            setLoading(false);
-        }, (err) => {
-            console.error("Firebase read failed: ", err);
-            setError("Gagal mengambil data dari Firebase.");
-            setLoading(false);
-        });
-        return unsubscribe;
-    }, []);
-
-    useEffect(() => {
-        const unsubscribe = fetchStats();
-        return () => unsubscribe();
-    }, [fetchStats]);
-
-    const handleCalculateStats = async () => {
-        setIsCalculating(true);
-        setError(null);
-        try {
-            const response = await fetch('/api/calculate-ea-stats');
-            if (!response.ok) {
-                let errorMessage = `Gagal memicu kalkulasi (Status: ${response.status}).`;
-                try {
-                    const errorData = await response.json();
-                    errorMessage = errorData.error || errorMessage;
-                } catch (e) {
-                    console.error("Respons server bukan JSON, kemungkinan timeout atau error internal.", e);
-                }
-                throw new Error(errorMessage);
-            }
-            addNotification('Sukses', 'Kalkulasi statistik dimulai. Data akan segera diperbarui.', 'take_profit_profit');
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setIsCalculating(false);
-        }
-    };
-
-    return (
-        <div className="animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-white">Global EA Overview</h2>
-                    <p className="text-slate-400">Statistik kinerja terpusat untuk semua robot trading Anda.</p>
-                </div>
-                <button onClick={handleCalculateStats} disabled={isCalculating} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-all duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed">
-                    {isCalculating ? <Loader className="animate-spin" size={20} /> : <Activity size={20} />}
-                    <span>{isCalculating ? 'Menghitung...' : 'Hitung Ulang Statistik'}</span>
-                </button>
-            </div>
-            
-            {loading && <div className="text-center py-10"><Loader className="animate-spin text-blue-500 mx-auto" size={48} /></div>}
-            
-            {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-lg text-center mb-6">{error}</div>}
-
-            {!loading && eaStats && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {eaStats.map(stats => (
-                        <EACard key={stats.name} robotStats={stats} />
-                    ))}
-                </div>
-            )}
         </div>
     );
 };
