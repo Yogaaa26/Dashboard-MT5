@@ -344,6 +344,16 @@ const EAOverviewPage = ({ accounts, tradeHistory }) => {
 };
 
 // PERBAIKAN: Menambahkan komponen RobotStat yang hilang
+const RobotStat = ({ icon, label, value }) => (
+    <div className="flex items-center space-x-3">
+        <div className="text-slate-400">{icon}</div>
+        <div>
+            <p className="text-xs text-slate-500">{label}</p>
+            <p className="font-semibold text-white">{value}</p>
+        </div>
+    </div>
+);
+
 const RobotCard = ({ robotData }) => {
     const [activeTab, setActiveTab] = useState('performance');
     const { name, stats } = robotData;
