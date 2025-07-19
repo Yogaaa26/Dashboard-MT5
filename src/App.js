@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Cpu } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
@@ -272,6 +272,100 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
     );
 };
 
+// --- KOMPONEN HALAMAN BARU ---
+const EAOverviewPage = ({ accounts, tradeHistory }) => {
+    const robotStats = useMemo(() => {
+        const robots = {};
+        const allHistory = Object.values(tradeHistory).flat();
+
+        accounts.forEach(acc => {
+            const robotName = acc.tradingRobotName || "Unknown Robot";
+            if (!robots[robotName]) {
+                robots[robotName] = { accounts: new Set(), positions: [] };
+            }
+            robots[robotName].accounts.add(acc.accountId);
+            if (acc.positions) {
+                robots[robotName].positions.push(...acc.positions);
+            }
+        });
+
+        return Object.keys(robots).map(robotName => {
+            const robotTrades = allHistory.filter(trade => trade.accountName && accounts.find(acc => acc.accountName === trade.accountName)?.tradingRobotName === robotName);
+            const winningTrades = robotTrades.filter(trade => parseFloat(trade.pl) >= 0).length;
+            const winrate = robotTrades.length > 0 ? ((winningTrades / robotTrades.length) * 100).toFixed(1) : 0;
+
+            return {
+                name: robotName,
+                stats: {
+                    accountsReach: robots[robotName].accounts.size,
+                    currentFloating: robots[robotName].positions.reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0),
+                    weeklyTrades: robotTrades.length,
+                    winrate: winrate
+                }
+            };
+        });
+    }, [accounts, tradeHistory]);
+
+    return (
+        <div className="animate-fade-in">
+            <h2 className="text-2xl font-bold text-white mb-6">Kinerja EA Overview</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {robotStats.map(robotData => <RobotCard key={robotData.name} robotData={robotData} />)}
+            </div>
+        </div>
+    );
+};
+
+const RobotCard = ({ robotData }) => {
+    const [activeTab, setActiveTab] = useState('performance');
+    const { name, stats } = robotData;
+
+    const TabButton = ({ tabName, label }) => (
+        <button 
+            onClick={() => setActiveTab(tabName)}
+            className={`px-3 py-1 text-sm rounded-md transition-colors ${activeTab === tabName ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}
+        >
+            {label}
+        </button>
+    );
+
+    return (
+        <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col">
+            <div className="p-4 border-b border-slate-700">
+                <h3 className="text-lg font-bold text-white flex items-center gap-x-2"><Cpu size={20} className="text-cyan-400"/> {name}</h3>
+            </div>
+            <div className="p-4">
+                <div className="flex space-x-2 border-b border-slate-700 pb-4 mb-4 overflow-x-auto">
+                    <TabButton tabName="performance" label="Kinerja" />
+                    <TabButton tabName="equity" label="Kurva Ekuitas" />
+                    <TabButton tabName="drawdown" label="Drawdown" />
+                    <TabButton tabName="duration" label="Durasi Trade" />
+                </div>
+                <div>
+                    {activeTab === 'performance' && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <RobotStat icon={<Users size={20}/>} label="Jangkauan Akun" value={stats.accountsReach} />
+                            <RobotStat icon={<Zap size={20}/>} label="Floating Saat Ini" value={formatCurrency(stats.currentFloating, false)} />
+                            <RobotStat icon={<Target size={20}/>} label="Trade Mingguan" value={stats.weeklyTrades} />
+                            <RobotStat icon={<Percent size={20}/>} label="Winrate" value={`${stats.winrate}%`} />
+                        </div>
+                    )}
+                    {activeTab === 'equity' && <PlaceholderContent title="Grafik Pertumbuhan Ekuitas" />}
+                    {activeTab === 'drawdown' && <PlaceholderContent title="Rasio Drawdown" />}
+                    {activeTab === 'duration' && <PlaceholderContent title="Rasio Durasi Trade" />}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const PlaceholderContent = ({ title }) => (
+    <div className="text-center p-8 text-slate-500">
+        <BarChart2 size={32} className="mx-auto mb-2" />
+        <p className="font-semibold">{title}</p>
+        <p className="text-xs">Data untuk fitur ini akan ditambahkan di update selanjutnya.</p>
+    </div>
+);
 
 // Main App Component
 export default function App() {
