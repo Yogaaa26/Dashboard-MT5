@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing, Loader } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, ArrowLeft, History, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
@@ -273,144 +272,6 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
     );
 };
 
-// --- KOMPONEN BARU YANG LEBIH CANGGIH UNTUK EA OVERVIEW ---
-
-// Komponen Kartu EA dengan Tab
-const EACard = ({ robotStats }) => {
-    const [activeTab, setActiveTab] = useState('overview');
-    const { name, accountsReach, profitLoss, totalFloating, weeklyTradeRatio, drawdownRatio, winrate, equityCurve } = robotStats;
-
-    const tabs = [
-        { id: 'overview', label: 'Ringkasan' },
-        { id: 'performance', label: 'Kinerja' },
-        { id: 'chart', label: 'Grafik' },
-    ];
-
-    const isProfit = profitLoss >= 0;
-    const isFloatingProfit = totalFloating >= 0;
-
-    return (
-        <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700 flex flex-col transition-all duration-300">
-            <div className="p-4 border-b border-slate-700">
-                <h3 className="text-xl font-bold text-white">{name}</h3>
-            </div>
-            <div className="flex-grow p-4">
-                {activeTab === 'overview' && (
-                    <div className="grid grid-cols-2 gap-4 animate-fade-in">
-                        <SummaryStat icon={<Briefcase size={20} className="text-blue-400"/>} title="Handle Akun" value={accountsReach} />
-                        <SummaryStat icon={<DollarSign size={20} className={isFloatingProfit ? "text-green-400" : "text-red-400"}/>} title="Total Floating" value={formatCurrency(totalFloating, false)} colorClass={isFloatingProfit ? 'text-green-400' : 'text-red-400'}/>
-                    </div>
-                )}
-                {activeTab === 'performance' && (
-                     <div className="grid grid-cols-2 gap-4 animate-fade-in">
-                        <SummaryStat icon={<TrendingUp size={20} className={isProfit ? "text-green-400" : "text-red-400"}/>} title="Total P/L" value={formatCurrency(profitLoss, false)} colorClass={isProfit ? 'text-green-400' : 'text-red-400'}/>
-                        <SummaryStat icon={<CheckCircle size={20} className="text-cyan-400"/>} title="Winrate" value={`${(winrate || 0).toFixed(1)}%`} />
-                        <SummaryStat icon={<List size={20} className="text-indigo-400"/>} title="Trade/Minggu" value={weeklyTradeRatio} />
-                        <SummaryStat icon={<TrendingDown size={20} className="text-yellow-400"/>} title="Avg. Drawdown" value={formatCurrency(drawdownRatio, false)} />
-                    </div>
-                )}
-                {activeTab === 'chart' && (
-                    <div className="h-48 w-full animate-fade-in">
-                        <p className="text-sm text-slate-400 mb-2">Kurva Pertumbuhan Ekuitas (7 Hari)</p>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={equityCurve} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} tick={{ fill: '#94a3b8' }} />
-                                <YAxis stroke="#94a3b8" fontSize={10} tick={{ fill: '#94a3b8' }} tickFormatter={(value) => `$${value}`} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} labelStyle={{ color: '#cbd5e1' }} />
-                                <Line type="monotone" dataKey="equity" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                )}
-            </div>
-            <div className="border-t border-slate-700 p-2 flex justify-center space-x-2 bg-slate-900/50 rounded-b-xl">
-                {tabs.map(tab => (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-1 text-sm font-semibold rounded-lg transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-
-// Komponen Utama untuk EA Overview
-const EAOverview = () => {
-    const [eaStats, setEaStats] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [isCalculating, setIsCalculating] = useState(false);
-    const [error, setError] = useState(null);
-
-    const fetchStats = useCallback(() => {
-        const statsRef = ref(db, 'ea_stats');
-        const unsubscribe = onValue(statsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                setEaStats(Object.values(snapshot.val()));
-                setError(null);
-            } else {
-                 setError("Belum ada statistik yang dihitung. Klik 'Hitung Ulang Statistik' untuk memulai.");
-                 setEaStats(null);
-            }
-            setLoading(false);
-        }, (err) => {
-            console.error("Firebase read failed: ", err);
-            setError("Gagal mengambil data dari Firebase.");
-            setLoading(false);
-        });
-        return unsubscribe;
-    }, []);
-
-    useEffect(() => {
-        const unsubscribe = fetchStats();
-        return () => unsubscribe();
-    }, [fetchStats]);
-
-    const handleCalculateStats = async () => {
-        setIsCalculating(true);
-        setError(null);
-        try {
-            const response = await fetch('/api/calculate-ea-stats');
-            if(!response.ok) {
-                throw new Error('Gagal memicu kalkulasi di server.');
-            }
-            // Data akan otomatis terupdate oleh listener onValue, jadi tidak perlu melakukan apa-apa di sini.
-            // Cukup tampilkan notifikasi sukses jika perlu.
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setIsCalculating(false);
-        }
-    };
-
-    return (
-        <div className="animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-white">Global EA Overview</h2>
-                    <p className="text-slate-400">Statistik kinerja terpusat untuk semua robot trading Anda.</p>
-                </div>
-                <button onClick={handleCalculateStats} disabled={isCalculating} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-all duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed">
-                    {isCalculating ? <Loader className="animate-spin" size={20} /> : <Activity size={20} />}
-                    <span>{isCalculating ? 'Menghitung...' : 'Hitung Ulang Statistik'}</span>
-                </button>
-            </div>
-            
-            {loading && <div className="text-center py-10">Memuat data...</div>}
-            
-            {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-lg text-center mb-6">{error}</div>}
-
-            {!loading && eaStats && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {eaStats.map(stats => (
-                        <EACard key={stats.name} robotStats={stats} />
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
 
 // Main App Component
 export default function App() {
@@ -650,44 +511,49 @@ export default function App() {
             <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} title="Pemberitahuan Suara" className={`p-2 rounded-lg transition-colors ${isSoundEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>
                 {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
-            <nav className="flex space-x-1 sm:space-x-2 rounded-lg bg-slate-800 p-1">
-   <button onClick={() => setPage('dashboard')} className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${page === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>Dashboard</button>
-   <button onClick={() => setPage('ea-overview')} className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${page === 'ea-overview' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>EA Overview</button>
-   <button onClick={() => setPage('history')} className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${page === 'history' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}>History</button>
-</nav>
+            {page === 'dashboard' ? (
+              <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
+                  <History size={20} />
+                  <span>Lihat Riwayat</span>
+              </button>
+            ) : (
+              <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
+                  <ArrowLeft size={20} />
+                  <span>Kembali</span>
+              </button>
+            )}
           </div>
         </header>
 
         <main className="border-t border-slate-700 pt-8">
-    {/* --- KONTEN DINAMIS BERDASARKAN HALAMAN --- */}
-    {page === 'dashboard' && (
-        <div className="animate-fade-in">
-            <div className="mb-6 relative">
-              <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800/70 backdrop-blur-sm border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-            </div>
-
-            <SummaryDashboard accounts={accounts} />
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {filteredAccounts.map((account, index) => (
-                    <AccountCard
-                        key={account.id}
-                        account={account}
-                        onToggleRobot={handleToggleRobot}
-                        onDelete={openDeleteModal}
-                        index={index}
-                        handleDragStart={handleDragStart}
-                        handleDragEnter={handleDragEnter}
-                        handleDragEnd={handleDragEnd}
-                        isDragging={dragging && dragItem.current === index}
-                    />
-                ))}
-            </div>
-        </div>
-    )}
-    {page === 'ea-overview' && <EAOverview />}
-    {page === 'history' && <HistoryPage accounts={accounts} tradeHistory={tradeHistory} />}
-</main>
+            {page === 'dashboard' ? (
+                <>
+                  <div className="mb-6 relative">
+                    <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800/70 backdrop-blur-sm border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                  </div>
+                  
+                  <SummaryDashboard accounts={accounts} />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                      {filteredAccounts.map((account, index) => (
+                          <AccountCard
+                              key={account.id}
+                              account={account}
+                              onToggleRobot={handleToggleRobot}
+                              onDelete={openDeleteModal}
+                              index={index}
+                              handleDragStart={handleDragStart}
+                              handleDragEnter={handleDragEnter}
+                              handleDragEnd={handleDragEnd}
+                              isDragging={dragging && dragItem.current === index}
+                          />
+                      ))}
+                  </div>
+                </>
+            ) : (
+                <HistoryPage accounts={accounts} tradeHistory={tradeHistory} />
+            )}
+        </main>
       </div>
       <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
       <ConfirmationModal
