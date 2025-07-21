@@ -444,6 +444,19 @@ export default function App() {
     closeDeleteModal();
   };
 
+const handleCancelOrder = async (accountId, ticket) => {
+    addNotification('Perintah Terkirim', `Mencoba membatalkan order tiket ${ticket}...`, 'default');
+    try {
+        await fetch('/api/cancel-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId, ticket })
+        });
+    } catch (error) {
+        addNotification('Error', 'Gagal mengirim perintah pembatalan.', 'take_profit_loss');
+    }
+  };
+
   const handleDragStart = (e, pos) => {
     dragItem.current = pos;
     setDragging(true);
