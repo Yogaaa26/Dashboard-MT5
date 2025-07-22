@@ -113,7 +113,7 @@ const SummaryDashboard = ({ accounts }) => {
   );
 };
 
-const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
+const AccountCard = ({ account, onToggleRobot, onDelete, onCancelOrder, handleDragStart, handleDragEnter, handleDragEnd, index, isDragging }) => {
   const totalPL = useMemo(() => (account.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0), [account.positions]);
   const isProfitable = totalPL > 0;
   
@@ -142,7 +142,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
       draggable="true" onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
       
       <div className="p-4 flex flex-col flex-grow min-h-0">
-        <div className="flex-shrink-0 flex justify-between items-start mb-4">
+        <div className="flex-shrink-0 flex justify-between items-start mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-x-2 mb-1">
               <h3 className="text-lg font-bold text-white">{account.accountName}</h3>
@@ -174,9 +174,17 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 <div className="flex flex-col justify-start items-end">
                     <p className="text-slate-500 text-xs mb-1">Status</p>
                      {isSingleItemPending ? 
-                        <div className="text-right"><p className="text-lg font-bold text-yellow-400 flex items-center justify-end"><Clock size={16} className="mr-2"/> Pending</p></div> :
-                        <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
-                    }
+                        <div className="text-right flex items-center justify-end">
+            <p className="text-lg font-bold text-yellow-400 flex items-center"><Clock size={16} className="mr-2"/> Pending</p>
+            <button 
+                onClick={(e) => { e.stopPropagation(); onCancelOrder(account.accountId, singleItem.ticket); }} 
+                title="Batalkan Order" 
+                className="ml-2 text-slate-500 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-slate-700">
+                <X size={16}/>
+            </button>
+        </div> :
+        <div className="text-right"><p className={`text-lg font-bold ${singleItem.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(singleItem.profit)}</p></div>
+    }
                 </div>
             </div>
           )}
@@ -192,24 +200,32 @@ const AccountCard = ({ account, onToggleRobot, onDelete, handleDragStart, handle
                 </div>
               ))}
               {(account.orders || []).map(ord => (
-                 <div key={ord.ticket} className="grid grid-cols-4 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
-                    <div>{getTypePill(ord.executionType)}</div>
-                    <div className="text-slate-300 font-semibold">{ord.pair}</div>
-                    <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
-                    <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="absolute bottom-3 right-3 p-1 rounded-full text-slate-600 hover:bg-slate-900/50 hover:text-red-500 transition-all duration-200 opacity-50 hover:opacity-100">
-        <Trash2 size={16} />
-      </button>
-    </div>
-  );
+            <div key={ord.ticket} className="grid grid-cols-5 gap-x-2 items-center bg-slate-900/50 p-2 rounded-md">
+                <div>{getTypePill(ord.executionType)}</div>
+                <div className="text-slate-300 font-semibold">{ord.pair}</div>
+                <div className="text-slate-400 text-right">Lot {ord.lotSize.toFixed(2)}</div>
+                <div className="text-yellow-400 text-right">@ {ord.entryPrice.toFixed(3)}</div>
+                <div className="text-right">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onCancelOrder(account.accountId, ord.ticket); }}
+                        title="Batalkan Order"
+                        className="text-slate-500 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-slate-700/80">
+                        <X size={14}/>
+                    </button>
+                    </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="absolute bottom-3 right-3 p-1 rounded-full text-slate-600 hover:bg-slate-900/50 hover:text-red-500 transition-all duration-200 opacity-50 hover:opacity-100">
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
 };
-
+           
 const HistoryPage = ({ accounts, tradeHistory }) => {
     const accountSummary = useMemo(() => {
         const allHistory = Object.values(tradeHistory).flat();
@@ -332,6 +348,21 @@ export default function App() {
         });
     }
   };
+
+// BARU: Fungsi untuk membatalkan pending order
+const handleCancelOrder = async (accountId, ticket) => {
+    try {
+        // Asumsi endpoint API adalah /api/cancel-order
+        await fetch('/api/cancel-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId, ticket })
+        });
+        addNotification('Info', `Perintah pembatalan order #${ticket} telah dikirim.`, 'default');
+    } catch (error) {
+        addNotification('Error', 'Gagal mengirim perintah pembatalan.', 'take_profit_loss');
+    }
+};
 
   useEffect(() => {
     const accountsRef = ref(db, 'accounts/');
@@ -541,6 +572,7 @@ export default function App() {
                               account={account}
                               onToggleRobot={handleToggleRobot}
                               onDelete={openDeleteModal}
+                              onCancelOrder={handleCancelOrder}
                               index={index}
                               handleDragStart={handleDragStart}
                               handleDragEnter={handleDragEnter}
