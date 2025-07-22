@@ -228,25 +228,32 @@ const AccountCard = ({ account, onToggleRobot, onDelete, onCancelOrder, handleDr
            
 const HistoryPage = ({ accounts, tradeHistory }) => {
     const accountSummary = useMemo(() => {
-        const allHistory = Object.values(tradeHistory).flat();
+        // REVISI 1: Mengganti .flat() dengan .reduce() agar lebih kompatibel
+        const allHistory = Object.values(tradeHistory || {}).reduce((acc, val) => acc.concat(val), []);
 
         return accounts.map(account => {
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
             const weeklyTrades = allHistory.filter(trade => {
-                if (trade.accountName !== account.accountName) return false;
+                if (!trade || trade.accountName !== account.accountName) return false;
+                // Pastikan tanggal valid sebelum membuat objek Date
+                if (typeof trade.closeDate !== 'string') return false;
                 const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
-                return tradeDate > oneWeekAgo;
+                return !isNaN(tradeDate) && tradeDate > oneWeekAgo;
             });
 
             const totalPL = weeklyTrades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
+
+            const startingBalance = (account.balance || 0) - totalPL;
+            const percentagePL = startingBalance > 0 ? (totalPL / startingBalance) * 100 : 0;
 
             return {
                 id: account.id,
                 name: account.accountName,
                 totalOrders: weeklyTrades.length,
                 totalPL: totalPL,
+                percentagePL: percentagePL, // REVISI 2: Memasukkan percentagePL ke dalam object
                 status: account.status,
             };
         }).sort((a,b) => a.name.localeCompare(b.name));
@@ -262,6 +269,7 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
                             <th scope="col" className="px-6 py-3">Nama Akun</th>
                             <th scope="col" className="px-6 py-3 text-center">Total Transaksi</th>
                             <th scope="col" className="px-6 py-3 text-right">Total P/L</th>
+                            <th scope="col" className="px-6 py-3 text-right">Persentase (%)</th>
                             <th scope="col" className="px-6 py-3 text-center">Status Saat Ini</th>
                         </tr>
                     </thead>
@@ -270,11 +278,15 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
                             <tr key={summary.id} className="border-b border-slate-700 hover:bg-slate-700/50">
                                 <td className="px-6 py-4 font-medium text-white">{summary.name}</td>
                                 <td className="px-6 py-4 text-center">{summary.totalOrders}</td>
-                                <td className={`px-6 py-4 font-semibold text-right ${summary.totalPL > 0 ? 'text-green-500' : summary.totalPL < 0 ? 'text-red-500' : 'text-slate-300'}`}>
+                                <td className={`px-6 py-4 font-semibold text-right ${summary.totalPL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                                     {formatCurrency(summary.totalPL)}
                                 </td>
+                                <td className={`px-6 py-4 font-semibold text-right ${summary.percentagePL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {/* Diberi penjaga || 0 untuk keamanan tambahan */}
+                                    {(summary.percentagePL || 0).toFixed(2)}%
+                                </td>
                                 <td className="px-6 py-4 text-center">
-                                    <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${summary.status === 'active' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-green-500/20 text-green-400'}`}>
+                                    <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${summary.status === 'active' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-500/20 text-slate-400'}`}>
                                         {summary.status === 'active' ? <Activity className="mr-2" size={14} /> : <Check className="mr-2" size={14} />}
                                         {summary.status === 'active' ? 'Floating' : 'Clear'}
                                     </span>
@@ -288,6 +300,61 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
     );
 };
 
+// BARU: Komponen untuk ringkasan global mingguan
+const GlobalSummary = ({ accounts, tradeHistory }) => {
+    const weeklySummary = useMemo(() => {
+        if (!tradeHistory || !accounts.length) {
+            return { totalPL: 0, totalTrades: 0, winRate: 0 };
+        }
+
+        const allHistory = Object.values(tradeHistory).reduce((acc, val) => acc.concat(val), []);
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        let totalPL = 0;
+        let totalTrades = 0;
+        let winningTrades = 0;
+
+        allHistory.forEach(trade => {
+            if (!trade || typeof trade.closeDate !== 'string') return;
+            const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
+            if (!isNaN(tradeDate) && tradeDate > oneWeekAgo) {
+                const profit = parseFloat(trade.pl) || 0;
+                totalPL += profit;
+                totalTrades++;
+                if (profit > 0) {
+                    winningTrades++;
+                }
+            }
+        });
+
+        const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+
+        return { totalPL, totalTrades, winRate };
+    }, [accounts, tradeHistory]);
+
+    return (
+        <div className="mb-8 p-4 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
+            <h3 className="text-lg font-bold text-white mb-3">Ringkasan Global (7 Hari Terakhir)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <div>
+                    <p className="text-sm text-slate-400">Total P/L</p>
+                    <p className={`text-2xl font-bold ${weeklySummary.totalPL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {formatCurrency(weeklySummary.totalPL, false)}
+                    </p>
+                </div>
+                <div>
+                    <p className="text-sm text-slate-400">Total Transaksi</p>
+                    <p className="text-2xl font-bold text-white">{weeklySummary.totalTrades}</p>
+                </div>
+                <div>
+                    <p className="text-sm text-slate-400">Win Rate</p>
+                    <p className="text-2xl font-bold text-cyan-400">{weeklySummary.winRate.toFixed(2)}%</p>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // Main App Component
 export default function App() {
@@ -583,8 +650,11 @@ const handleCancelOrder = async (accountId, ticket) => {
                   </div>
                 </>
             ) : (
-                <HistoryPage accounts={accounts} tradeHistory={tradeHistory} />
-            )}
+               <>
+                  <GlobalSummary accounts={accounts} tradeHistory={tradeHistory} />
+                  <HistoryPage accounts={accounts} tradeHistory={tradeHistory} />
+               </>
+             )}
         </main>
       </div>
       <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
