@@ -272,17 +272,22 @@ const HistoryPage = ({ accounts, tradeHistory }) => {
                             <th scope="col" className="px-6 py-3 text-right">Persentase (%)</th>
                             <th scope="col" className="px-6 py-3 text-center">Status Saat Ini</th>
                         </tr>
-                    </thead>
+                    </thead> 
                     <tbody>
                         {accountSummary.map(summary => (
-                            <tr key={summary.id} className="border-b border-slate-700 hover:bg-slate-700/50">
-                                <td className="px-6 py-4 font-medium text-white">{summary.name}</td>
-                                <td className="px-6 py-4 text-center">{summary.totalOrders}</td>
-                                <td className={`px-6 py-4 font-semibold text-right ${summary.totalPL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+        <tr key={summary.id} className="border-b border-slate-700 hover:bg-slate-700/50">
+            <td className="px-6 py-4 font-medium text-white">{summary.name}</td>
+            <td className="px-6 py-4 text-center">{summary.totalOrders}</td>
+            {/* REVISI 1: Logika pewarnaan untuk Total P/L diperbaiki */}
+            <td className={`px-6 py-4 font-semibold text-right ${
+                summary.totalPL > 0 ? 'text-green-500' : summary.totalPL < 0 ? 'text-red-500' : 'text-slate-300'
+            }`}>
                                     {formatCurrency(summary.totalPL)}
-                                </td>
-                                <td className={`px-6 py-4 font-semibold text-right ${summary.percentagePL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                    {/* Diberi penjaga || 0 untuk keamanan tambahan */}
+            </td>
+            {/* REVISI 2: Logika pewarnaan untuk Persentase diperbaiki */}
+            <td className={`px-6 py-4 font-semibold text-right ${
+                summary.percentagePL > 0 ? 'text-green-500' : summary.percentagePL < 0 ? 'text-red-500' : 'text-slate-300'
+            }`}>
                                     {(summary.percentagePL || 0).toFixed(2)}%
                                 </td>
                                 <td className="px-6 py-4 text-center">
