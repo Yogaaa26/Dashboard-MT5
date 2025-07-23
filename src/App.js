@@ -688,7 +688,7 @@ export default function App() {
             });
             const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
             return { totalPL, totalTrades, winRate };
-        }, [accounts, tradeHistory]);
+        }, [accounts, tradeHistory, historyResetTimestamp]);
 
         return (
             <div className="mb-8 p-4 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
