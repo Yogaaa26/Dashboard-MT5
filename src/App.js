@@ -33,12 +33,13 @@ export default function App() {
     const [notifPermission, setNotifPermission] = useState('default');
     const [isSoundEnabled, setIsSoundEnabled] = useState(false);
     const [historyResetTimestamp, setHistoryResetTimestamp] = useState(null); 
-    const [showResetConfirm, setShowResetConfirm] = useState(false);
     const prevPositionsRef = useRef({});
     const initialLoadComplete = useRef(false);
     const dragItem = useRef(null);
     const dragOverItem = useRef(null);
     const [dragging, setDragging] = useState(false);
+    const [showResetConfirm, setShowResetConfirm] = useState(false); // <-- TAMBAHKAN BARIS INI
+    
 
     // --- FUNGSI LOGIKA (HANDLERS) ---
     const addNotification = (title, message, type) => {
@@ -60,6 +61,12 @@ export default function App() {
         new Notification(title, options);
     }, [isNotifEnabled, notifPermission]);
     
+     const handleConfirmReset = () => {
+    setHistoryResetTimestamp(new Date());
+    addNotification('Sukses', 'Tampilan riwayat telah direset.', 'take_profit_profit');
+    setShowResetConfirm(false); // Tutup modal setelah konfirmasi
+    };
+
     const handleNotifToggle = () => {
         if (!("Notification" in window)) {
             alert("Browser ini tidak mendukung notifikasi desktop.");
@@ -78,12 +85,6 @@ export default function App() {
                 }
             });
         }
-    };
-    
-    const handleConfirmReset = () => {
-        setHistoryResetTimestamp(new Date());
-        addNotification('Sukses', 'Tampilan riwayat telah direset.', 'take_profit_profit');
-        setShowResetConfirm(false);
     };
 
     const handleCancelOrder = async (accountId, ticket) => {
@@ -290,20 +291,20 @@ export default function App() {
 
     // --- KOMPONEN PEMBANTU ---
     const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Konfirmasi', confirmColorClass = 'bg-blue-600 hover:bg-blue-700' }) => {
-        if (!isOpen) return null;
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 animate-fade-in">
-                <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl border border-slate-700">
-                    <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-                    <p className="text-sm text-slate-300 mb-6">{message}</p>
-                    <div className="flex justify-end space-x-4">
-                        <button onClick={onCancel} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Batal</button>
-                        <button onClick={onConfirm} className={`${confirmColorClass} text-white font-bold py-2 px-4 rounded-lg transition-colors`}>{confirmText}</button>
-                    </div>
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 animate-fade-in">
+            <div className="bg-slate-800/80 backdrop-blur-sm rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl border border-slate-700">
+                <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
+                <p className="text-sm text-slate-300 mb-6">{message}</p>
+                <div className="flex justify-end space-x-4">
+                    <button onClick={onCancel} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Batal</button>
+                    <button onClick={onConfirm} className={`${confirmColorClass} text-white font-bold py-2 px-4 rounded-lg transition-colors`}>{confirmText}</button>
                 </div>
             </div>
-        );
-    };
+        </div>
+    );
+};
 
     const Notification = ({ notification, onClose }) => {
         useEffect(() => {
@@ -533,7 +534,6 @@ export default function App() {
                 
                 const weeklyTrades = relevantHistory.filter(trade => {
                     if (trade.accountName !== account.accountName) return false;
-                    if (typeof trade.closeDate !== 'string') return false;
                     const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
                     return !isNaN(tradeDate) && tradeDate > oneWeekAgo;
                 });
@@ -588,63 +588,20 @@ export default function App() {
                     'Presentase': percentagePL.toFixed(2) + '%'
                 };
             });
-            
-            const title = [["MJA Monthly Trade Summary"]];
-            const headers = Object.keys(summaryData[0] || {});
-            const data = summaryData.map(row => headers.map(header => row[header]));
-
-            const sheetData = [
-                ...title,
-                [],
-                headers,
-                ...data
-            ];
-
-            const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
-
-            worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
-            
-            if(worksheet['A1']) {
-                worksheet['A1'].s = {
-                    font: { sz: 24, bold: true },
-                    alignment: { horizontal: "center", vertical: "center" }
-                };
-            }
-            
-            headers.forEach((h, i) => {
-                const cellRef = XLSX.utils.encode_cell({ r: 2, c: i });
-                if(worksheet[cellRef]) {
-                    worksheet[cellRef].s = {
-                        font: { bold: true },
-                        alignment: { horizontal: "center", vertical: "center" }
-                    };
-                }
-            });
-
-            data.forEach((row, rowIndex) => {
-                row.forEach((cell, colIndex) => {
-                    const cellRef = XLSX.utils.encode_cell({ r: rowIndex + 3, c: colIndex });
-                    if (worksheet[cellRef]) {
-                        worksheet[cellRef].s = {
-                            alignment: { horizontal: "center", vertical: "center" }
-                        };
-                    }
-                });
-            });
-
+            const worksheet = XLSX.utils.json_to_sheet(summaryData);
             const columnWidths = [
                 { wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 25 },
                 { wch: 20 }, { wch: 20 }, { wch: 20 }
             ];
             worksheet['!cols'] = columnWidths;
             const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Ringkasan Bulanan');
-            XLSX.writeFile(workbook, 'MJA_Monthly_Trade_Summary.xlsx');
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Ringkasan 1 Bulan');
+            XLSX.writeFile(workbook, 'Ringkasan_Trading_Bulanan.xlsx');
         };
 
         const handleReset = () => {
-            onResetRequest();
-        };
+            onResetRequest(); 
+};
 
         return (
             <div className="animate-fade-in">
@@ -669,7 +626,7 @@ export default function App() {
                             </tr>
                         </thead>
                         <tbody>
-                            {accounts.length > 0 ? accountSummary.map(summary => (
+                            {accountSummary.map(summary => (
                                 <tr key={summary.id} className="border-b border-slate-700 hover:bg-slate-700/50">
                                     <td className="px-6 py-4 font-medium text-white">{summary.name}</td>
                                     <td className="px-6 py-4 text-center">{summary.totalOrders}</td>
@@ -686,13 +643,7 @@ export default function App() {
                                         </span>
                                     </td>
                                 </tr>
-                            )) : (
-                                <tr>
-                                    <td colSpan="5" className="text-center py-8 text-slate-500 italic">
-                                        Tidak ada akun untuk ditampilkan.
-                                    </td>
-                                </tr>
-                            )}
+                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -701,20 +652,22 @@ export default function App() {
     };
     
     const GlobalSummary = ({ accounts, tradeHistory, historyResetTimestamp }) => {
-        const weeklySummary = useMemo(() => {
-            if (!tradeHistory || !accounts.length) {
-                return { totalPL: 0, totalTrades: 0, winRate: 0 };
-            }
-            
-            let allHistory = Object.values(tradeHistory || {}).reduce((acc, val) => acc.concat(val), []);
+    const weeklySummary = useMemo(() => {
+        if (!tradeHistory || !accounts.length) {
+            return { totalPL: 0, totalTrades: 0, winRate: 0 };
+        }
+        
+        let allHistory = Object.values(tradeHistory || {}).reduce((acc, val) => acc.concat(val), []);
 
-            if (historyResetTimestamp) {
-                allHistory = allHistory.filter(trade => {
-                    if (!trade || typeof trade.closeDate !== 'string') return false;
-                    const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
-                    return !isNaN(tradeDate) && tradeDate > historyResetTimestamp;
-                });
-            }
+        // --- TAMBAHKAN LOGIKA FILTER INI ---
+        if (historyResetTimestamp) {
+            allHistory = allHistory.filter(trade => {
+                if (!trade || typeof trade.closeDate !== 'string') return false;
+                const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
+                return !isNaN(tradeDate) && tradeDate > historyResetTimestamp;
+            });
+        }
+        // --- AKHIR BLOK TAMBAHAN ---
 
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -735,7 +688,7 @@ export default function App() {
             });
             const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
             return { totalPL, totalTrades, winRate };
-        }, [accounts, tradeHistory, historyResetTimestamp]);
+        }, [accounts, tradeHistory]);
 
         return (
             <div className="mb-8 p-4 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
@@ -827,7 +780,7 @@ export default function App() {
                 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
             `}</style>
             
-            <div className="max-w-7xl mx-auto relative z-10">
+            <div className="max-w-7xl mx-auto">
                 <header className="mb-4 flex flex-wrap justify-between items-center gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-white">MJA Monitoring Dashboard</h1>
@@ -887,8 +840,8 @@ export default function App() {
                             <GlobalSummary 
                                 accounts={accounts} 
                                 tradeHistory={tradeHistory} 
-                                historyResetTimestamp={historyResetTimestamp}
-                            />
+                                historyResetTimestamp={historyResetTimestamp} 
+                              />
                             <HistoryPage 
                                 accounts={accounts} 
                                 tradeHistory={tradeHistory} 
@@ -902,16 +855,16 @@ export default function App() {
             </div>
 
             <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
+            
             <ConfirmationModal
                 isOpen={deleteModal.isOpen}
                 title="Konfirmasi Penghapusan"
                 message={`Apakah Anda yakin ingin menghapus akun "${deleteModal.accountName}"? Tindakan ini akan menghapus data dari dasbor. Anda juga harus mematikan EA di akun ini agar tidak muncul kembali.`}
                 onConfirm={handleDeleteAccount}
                 onCancel={closeDeleteModal}
-                confirmText="Hapus"
-                confirmColorClass="bg-red-600 hover:bg-red-700"
             />
-             <ConfirmationModal
+            
+           <ConfirmationModal
                 isOpen={showResetConfirm}
                 title="Konfirmasi Reset Tampilan"
                 message="Apakah Anda yakin ingin mereset tampilan riwayat? Ini hanya akan menampilkan data baru yang masuk setelah ini."
@@ -920,6 +873,7 @@ export default function App() {
                 confirmText="Ya, Reset"
                 confirmColorClass="bg-blue-600 hover:bg-blue-700"
             />
+
             <AccountDetailModal
                 isOpen={detailModal.isOpen}
                 onClose={closeDetailModal}
