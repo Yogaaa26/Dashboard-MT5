@@ -4,6 +4,7 @@ import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
 import * as XLSX from 'xlsx';
+import InfoBanner from './InfoBanner';
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
@@ -35,7 +36,7 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confir
     );
 };
 
-const Notification = ({ notification, onClose }) => {
+const NotificationToast = ({ notification, onClose }) => {
     useEffect(() => {
         const timer = setTimeout(() => onClose(notification.id), 5000);
         return () => clearTimeout(timer);
@@ -60,11 +61,12 @@ const Notification = ({ notification, onClose }) => {
     );
 };
 
-const NotificationContainer = ({ notifications, removeNotification }) => (
+const NotificationToastContainer = ({ notifications, removeNotification }) => (
     <div className="fixed bottom-4 right-4 z-50 w-80 space-y-3">
-        {notifications.map(n => <Notification key={n.id} notification={n} onClose={removeNotification} />)}
+        {notifications.map(n => <NotificationToast key={n.id} notification={n} onClose={removeNotification} />)}
     </div>
 );
+
 
 const SummaryStat = ({ icon, title, value, colorClass = 'text-white', onClick, isActive }) => (
     <div
@@ -559,7 +561,8 @@ export default function App() {
         } else if (notifPermission === 'denied') {
             alert("Anda telah memblokir notifikasi. Mohon aktifkan melalui pengaturan browser.");
         } else {
-            Notification.requestPermission().then(permission => {
+            // Memanggil API Browser yang benar, bukan komponen React
+            window.Notification.requestPermission().then(permission => {
                 setNotifPermission(permission);
                 if (permission === 'granted') {
                     setIsNotifEnabled(true);
@@ -777,114 +780,119 @@ export default function App() {
 
     // --- TAMPILAN UTAMA APP (RETURN) ---
     return (
-        <div className="bg-gradient-to-br from-slate-900 to-gray-900 min-h-screen text-white font-sans p-4 sm:p-6 lg:p-8">
-            <style>{`
-                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 20px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
-            `}</style>
+        <div className="bg-gradient-to-br from-slate-900 to-gray-900 min-h-screen text-white font-sans">
+            <InfoBanner />
+            
+            <div className="p-4 sm:p-6 lg:p-8">
+                <style>{`
+                    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 20px; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
+                `}</style>
 
-            <div className="max-w-7xl mx-auto">
-                <header className="mb-4 flex flex-wrap justify-between items-center gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white">MJA Monitoring Dashboard</h1>
-                        <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button onClick={handleNotifToggle} title="Notifikasi Browser" className={`p-2 rounded-lg transition-colors ${isNotifEnabled && notifPermission === 'granted' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'} ${notifPermission === 'denied' ? 'text-red-500' : ''}`}>
-                            <BellRing size={20} />
-                        </button>
-                        <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} title="Pemberitahuan Suara" className={`p-2 rounded-lg transition-colors ${isSoundEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>
-                            {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                        </button>
+                <div className="max-w-7xl mx-auto">
+                    <header className="mb-4 flex flex-wrap justify-between items-center gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-white">MJA Monitoring Dashboard</h1>
+                            <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <button onClick={handleNotifToggle} title="Notifikasi Browser" className={`p-2 rounded-lg transition-colors ${isNotifEnabled && notifPermission === 'granted' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'} ${notifPermission === 'denied' ? 'text-red-500' : ''}`}>
+                                <BellRing size={20} />
+                            </button>
+                            <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} title="Pemberitahuan Suara" className={`p-2 rounded-lg transition-colors ${isSoundEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>
+                                {isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                            </button>
+                            {page === 'dashboard' ? (
+                                <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
+                                    <History size={20} />
+                                    <span>Lihat Riwayat</span>
+                                </button>
+                            ) : (
+                                <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
+                                    <ArrowLeft size={20} />
+                                    <span>Kembali</span>
+                                </button>
+                            )}
+                        </div>
+                    </header>
+
+                    <main className="border-t border-slate-700 pt-8">
                         {page === 'dashboard' ? (
-                            <button onClick={() => setPage('history')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
-                                <History size={20} />
-                                <span>Lihat Riwayat</span>
-                            </button>
+                            <>
+                                <div className="mb-6 relative">
+                                    <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800/70 backdrop-blur-sm border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                                </div>
+
+                                <SummaryDashboard accounts={accounts} activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                                    {filteredAccounts.map((account, index) => (
+                                        <AccountCard
+                                            key={account.id}
+                                            account={account}
+                                            onToggleRobot={handleToggleRobot}
+                                            onDelete={openDeleteModal}
+                                            onCancelOrder={handleCancelOrder}
+                                            onCardClick={openDetailModal}
+                                            index={index}
+                                            handleDragStart={handleDragStart}
+                                            handleDragEnter={handleDragEnter}
+                                            handleDragEnd={handleDragEnd}
+                                            isDragging={dragging && dragItem.current === index}
+                                        />
+                                    ))}
+                                </div>
+                            </>
                         ) : (
-                            <button onClick={() => setPage('dashboard')} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-transform duration-200 hover:scale-105">
-                                <ArrowLeft size={20} />
-                                <span>Kembali</span>
-                            </button>
+                            <>
+                                <GlobalSummary
+                                    accounts={accounts}
+                                    tradeHistory={tradeHistory}
+                                    historyResetTimestamp={historyResetTimestamp}
+                                />
+                                <HistoryPage
+                                    accounts={accounts}
+                                    tradeHistory={tradeHistory}
+                                    addNotification={addNotification}
+                                    historyResetTimestamp={historyResetTimestamp}
+                                    onResetRequest={() => setShowResetConfirm(true)}
+                                />
+                            </>
                         )}
-                    </div>
-                </header>
+                    </main>
+                </div>
 
-                <main className="border-t border-slate-700 pt-8">
-                    {page === 'dashboard' ? (
-                        <>
-                            <div className="mb-6 relative">
-                                <input type="text" placeholder="Cari nama akun..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800/70 backdrop-blur-sm border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                            </div>
+                {/* PERUBAHAN 4: Menggunakan komponen NotificationToastContainer yang baru */}
+                <NotificationToastContainer notifications={notifications} removeNotification={removeNotification} />
 
-                            <SummaryDashboard accounts={accounts} activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
+                <ConfirmationModal
+                    isOpen={deleteModal.isOpen}
+                    title="Konfirmasi Penghapusan"
+                    message={`Apakah Anda yakin ingin menghapus akun "${deleteModal.accountName}"? Tindakan ini akan menghapus data dari dasbor. Anda juga harus mematikan EA di akun ini agar tidak muncul kembali.`}
+                    onConfirm={handleDeleteAccount}
+                    onCancel={closeDeleteModal}
+                />
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                                {filteredAccounts.map((account, index) => (
-                                    <AccountCard
-                                        key={account.id}
-                                        account={account}
-                                        onToggleRobot={handleToggleRobot}
-                                        onDelete={openDeleteModal}
-                                        onCancelOrder={handleCancelOrder}
-                                        onCardClick={openDetailModal}
-                                        index={index}
-                                        handleDragStart={handleDragStart}
-                                        handleDragEnter={handleDragEnter}
-                                        handleDragEnd={handleDragEnd}
-                                        isDragging={dragging && dragItem.current === index}
-                                    />
-                                ))}
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <GlobalSummary
-                                accounts={accounts}
-                                tradeHistory={tradeHistory}
-                                historyResetTimestamp={historyResetTimestamp}
-                            />
-                            <HistoryPage
-                                accounts={accounts}
-                                tradeHistory={tradeHistory}
-                                addNotification={addNotification}
-                                historyResetTimestamp={historyResetTimestamp}
-                                onResetRequest={() => setShowResetConfirm(true)}
-                            />
-                        </>
-                    )}
-                </main>
+               <ConfirmationModal
+                    isOpen={showResetConfirm}
+                    title="Konfirmasi Reset Tampilan"
+                    message="Apakah Anda yakin ingin mereset tampilan riwayat? Ini hanya akan menampilkan data baru yang masuk setelah ini."
+                    onConfirm={handleConfirmReset}
+                    onCancel={() => setShowResetConfirm(false)}
+                    confirmText="Ya, Reset"
+                    confirmColorClass="bg-blue-600 hover:bg-blue-700"
+                />
+
+                <AccountDetailModal
+                    isOpen={detailModal.isOpen}
+                    onClose={closeDetailModal}
+                    account={detailModal.account}
+                    tradeHistory={tradeHistory}
+                />
             </div>
-
-            <NotificationContainer notifications={notifications} removeNotification={removeNotification} />
-
-            <ConfirmationModal
-                isOpen={deleteModal.isOpen}
-                title="Konfirmasi Penghapusan"
-                message={`Apakah Anda yakin ingin menghapus akun "${deleteModal.accountName}"? Tindakan ini akan menghapus data dari dasbor. Anda juga harus mematikan EA di akun ini agar tidak muncul kembali.`}
-                onConfirm={handleDeleteAccount}
-                onCancel={closeDeleteModal}
-            />
-
-           <ConfirmationModal
-                isOpen={showResetConfirm}
-                title="Konfirmasi Reset Tampilan"
-                message="Apakah Anda yakin ingin mereset tampilan riwayat? Ini hanya akan menampilkan data baru yang masuk setelah ini."
-                onConfirm={handleConfirmReset}
-                onCancel={() => setShowResetConfirm(false)}
-                confirmText="Ya, Reset"
-                confirmColorClass="bg-blue-600 hover:bg-blue-700"
-            />
-
-            <AccountDetailModal
-                isOpen={detailModal.isOpen}
-                onClose={closeDetailModal}
-                account={detailModal.account}
-                tradeHistory={tradeHistory}
-            />
         </div>
-    );
+     );
 }
