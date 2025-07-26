@@ -18,6 +18,20 @@ const formatCurrency = (value, includeSign = true) => {
     return `${sign}$${absValue.toFixed(2)}`;
 };
 
+const getEaIdentifier = (account) => {
+    if (account.magicNumber) {
+        return account.magicNumber.toString();
+    }
+    if (account.tradingRobotName) {
+        const match = account.tradingRobotName.match(/\((\d+)\)$/);
+        if (match && match[1]) {
+            return match[1];
+        }
+        return account.tradingRobotName;
+    }
+    return null;
+};
+
 // --- KOMPONEN PEMBANTU ---
 
 const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Konfirmasi', confirmColorClass = 'bg-blue-600 hover:bg-blue-700' }) => {
@@ -28,7 +42,6 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel, confir
                 <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
                 <p className="text-sm text-slate-300 mb-6">{message}</p>
                 <div className="flex justify-end space-x-4">
-                    {/* Tombol Batal hanya muncul jika ada fungsi onCancel */}
                     {onCancel && <button onClick={onCancel} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Batal</button>}
                     <button onClick={onConfirm} className={`bg-gradient-to-br ${confirmColorClass} text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 hover:shadow-lg hover:shadow-current/40`}>{confirmText}</button>
                 </div>
@@ -466,7 +479,7 @@ export default function App() {
     const [dragging, setDragging] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [togglingRobotId, setTogglingRobotId] = useState(null);
-    const [showEaDeleteInfo, setShowEaDeleteInfo] = useState({ isOpen: false, eaName: '' });
+    const [showEaDeleteInfo, setShowEaDeleteInfo] = useState({ isOpen: false, eaName: '', eaId: null });
 
     const addNotification = (title, message, type) => setNotifications(prev => [{ id: Date.now(), title, message, type }, ...prev].slice(0, 5));
     const removeNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
@@ -549,8 +562,8 @@ export default function App() {
     };
     const openDetailModal = (account) => setDetailModal({ isOpen: true, account: account });
     const closeDetailModal = () => setDetailModal({ isOpen: false, account: null });
-    const openEaDeleteInfoModal = (eaName) => setShowEaDeleteInfo({ isOpen: true, eaName });
-    const closeEaDeleteInfoModal = () => setShowEaDeleteInfo({ isOpen: false, eaName: '' });
+    const openEaDeleteInfoModal = (eaName, eaId) => setShowEaDeleteInfo({ isOpen: true, eaName, eaId });
+    const closeEaDeleteInfoModal = () => setShowEaDeleteInfo({ isOpen: false, eaName: '', eaId: null });
 
     useEffect(() => {
         const accountsRef = ref(db, 'accounts/');
@@ -620,9 +633,11 @@ export default function App() {
         const eaMap = new Map();
         const allHistory = Object.values(tradeHistory).flat();
         Object.values(accountsData).forEach(acc => {
-            if (acc.tradingRobotName) {
-                if (!eaMap.has(acc.tradingRobotName)) {
-                    eaMap.set(acc.tradingRobotName, {
+            const eaIdentifier = getEaIdentifier(acc);
+            if (eaIdentifier && eaIdentifier !== "0" && acc.tradingRobotName !== "Tidak Ada EA Aktif") {
+                if (!eaMap.has(eaIdentifier)) {
+                    eaMap.set(eaIdentifier, {
+                        eaId: eaIdentifier,
                         eaName: acc.tradingRobotName,
                         accounts: [],
                         totalFloatingPL: 0,
@@ -630,7 +645,10 @@ export default function App() {
                         history: []
                     });
                 }
-                const ea = eaMap.get(acc.tradingRobotName);
+                const ea = eaMap.get(eaIdentifier);
+                if (!ea.eaName.includes("(") && acc.tradingRobotName.includes("(")) {
+                    ea.eaName = acc.tradingRobotName;
+                }
                 ea.accounts.push(acc);
                 ea.totalFloatingPL += (acc.positions || []).reduce((sum, pos) => sum + (parseFloat(pos.profit) || 0), 0);
                 ea.totalEquity += (acc.balance || 0);
@@ -638,8 +656,11 @@ export default function App() {
         });
         allHistory.forEach(trade => {
             const account = Object.values(accountsData).find(acc => acc.accountName === trade.accountName);
-            if (account && account.tradingRobotName && eaMap.has(account.tradingRobotName)) {
-                eaMap.get(account.tradingRobotName).history.push(trade);
+            if (account) {
+                const eaIdentifier = getEaIdentifier(account);
+                if (eaIdentifier && eaMap.has(eaIdentifier)) {
+                    eaMap.get(eaIdentifier).history.push(trade);
+                }
             }
         });
         return Array.from(eaMap.values()).map(ea => {
@@ -671,13 +692,23 @@ export default function App() {
                     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                     .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 20px; }
                     .font-mono { font-family: 'Roboto Mono', monospace; }
+                    @keyframes float {
+                        0% { transform: translateY(0px); }
+                        50% { transform: translateY(-10px); }
+                        100% { transform: translateY(0px); }
+                    }
+                    .animate-float {
+                        animation: float 6s ease-in-out infinite;
+                    }
                 `}</style>
                 <div className="max-w-7xl mx-auto">
                     <header className="mb-8 flex flex-wrap justify-between items-center gap-4">
-                        <div>
-                            <h1 className="text-3xl font-bold text-white">MJA Monitoring</h1>
-                            <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
-                        </div>
+                        {page !== 'ea-overview' ? (
+                            <div>
+                                <h1 className="text-3xl font-bold text-white">MJA Monitoring</h1>
+                                <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
+                            </div>
+                        ) : <div />}
                         <div className="flex items-center gap-3">
                             <button onClick={handleNotifToggle} title="Notifikasi Browser" className={`p-2 rounded-lg transition-all duration-300 ${isNotifEnabled && notifPermission === 'granted' ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}><BellRing size={20} /></button>
                             <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} title="Pemberitahuan Suara" className={`p-2 rounded-lg transition-all duration-300 ${isSoundEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}</button>
@@ -716,7 +747,6 @@ export default function App() {
                         )}
                         {page === 'ea-overview' && <EAOverviewPage eaData={eaOverviewData} onDeleteEa={openEaDeleteInfoModal} />}
                     </main>
-                    {/* PERBAIKAN: Div penyangga ditambahkan di sini */}
                     <div className="h-24" />
                 </div>
                 <NotificationToastContainer notifications={notifications} removeNotification={removeNotification} />
@@ -725,9 +755,9 @@ export default function App() {
                 <ConfirmationModal
                     isOpen={showEaDeleteInfo.isOpen}
                     title={`Cara Menghapus Robot "${showEaDeleteInfo.eaName}"`}
-                    message="Untuk menghapus ringkasan robot ini dari dasbor, Anda harus menghapus atau mengganti nama properti 'tradingRobotName' pada semua akun yang menggunakannya langsung di terminal MetaTrader Anda. Dasbor akan diperbarui secara otomatis."
+                    message={`Untuk menghapus robot dengan Magic Number (${showEaDeleteInfo.eaId}) ini, Anda harus menghentikan atau menghapus EA dari semua akun yang menggunakannya di terminal MetaTrader Anda. Dasbor akan diperbarui secara otomatis.`}
                     onConfirm={closeEaDeleteInfoModal}
-                    onCancel={null} // Tidak ada tombol batal
+                    onCancel={null}
                     confirmText="Mengerti"
                     confirmColorClass="bg-blue-600 hover:bg-blue-700"
                 />
