@@ -304,15 +304,32 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
     }, [accounts, tradeHistory, historyResetTimestamp]);
 
     const handleDownload = (period) => {
-        let historyToProcess;
+        // 1. Ambil dan siapkan data riwayat dasar
+        const allHistory = flattenHistory(tradeHistory).filter(trade => trade && trade.type === 'trade');
+
+        let periodHistory;
+        let tableData;
         let periodLabel;
+        let summaryTitle;
+        let alertMessage;
 
         if (period === 'weekly') {
-            if (accountSummary.length === 0) {
-                alert("Tidak ada data mingguan untuk diunduh.");
-                return;
-            }
-            const data = accountSummary.map((summary, index) => ({
+            periodLabel = 'Mingguan';
+            summaryTitle = 'Ringkasan Global (Minggu Ini)';
+            alertMessage = 'Tidak ada data mingguan untuk diunduh.';
+            
+            const today = new Date();
+            const day = today.getDay();
+            const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+            const startOfWeek = new Date(today.setDate(diff));
+            startOfWeek.setHours(0, 0, 0, 0);
+            
+            periodHistory = allHistory.filter(trade => {
+                const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
+                return !isNaN(tradeDate) && tradeDate >= startOfWeek;
+            });
+            
+            tableData = accountSummary.map((summary, index) => ({
                 'No.': index + 1,
                 'Periode': 'Minggu Ini (Sejak Senin)',
                 'Nama Akun': summary.name,
@@ -321,37 +338,28 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
                 'Total P/L': summary.totalPL,
                 'Presentase (%)': summary.percentagePL
             }));
-            historyToProcess = data;
-            periodLabel = 'Mingguan';
-        } else { // Untuk bulanan
-            let allHistory = flattenHistory(tradeHistory);
-            const filteredAllHistory = allHistory.filter(trade => trade && trade.type === 'trade');
 
-            // --- PERUBAHAN DI SINI: Menghitung awal bulan (Tanggal 1) ---
+        } else { // Untuk bulanan
+            periodLabel = 'Bulanan';
+            summaryTitle = `Ringkasan Global (${new Date().toLocaleString('id-ID', { month: 'long' })})`;
+            alertMessage = `Tidak ada data riwayat di bulan ${new Date().toLocaleString('id-ID', { month: 'long' })} untuk diunduh.`;
+
             const today = new Date();
             const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
             startOfMonth.setHours(0, 0, 0, 0);
-            // --- AKHIR PERUBAHAN ---
-
-            const monthlyHistory = filteredAllHistory.filter(trade => {
-                if (!trade || typeof trade.closeDate !== 'string') return false;
+            
+            periodHistory = allHistory.filter(trade => {
                 const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
-                return !isNaN(tradeDate) && tradeDate >= startOfMonth; // Filter berdasarkan awal bulan
+                return !isNaN(tradeDate) && tradeDate >= startOfMonth;
             });
 
-            if (monthlyHistory.length === 0) {
-                alert("Tidak ada data riwayat di bulan ini untuk diunduh.");
-                return;
-            }
-            
-            const historyMap = monthlyHistory.reduce((acc, trade) => {
+            const historyMap = periodHistory.reduce((acc, trade) => {
                 const accountName = trade.accountName;
                 if (!acc[accountName]) acc[accountName] = [];
                 acc[accountName].push(trade);
                 return acc;
             }, {});
-
-            const data = accounts.map((account, index) => {
+            tableData = accounts.map((account, index) => {
                 const trades = historyMap[account.accountName] || [];
                 const totalPL = trades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
                 const totalTrades = trades.length;
@@ -359,7 +367,7 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
                 const percentagePL = currentBalance > 0 ? (totalPL / currentBalance) * 100 : 0;
                 return {
                     'No.': index + 1,
-                    'Periode': new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' }), // Label diperbarui
+                    'Periode': new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' }),
                     'Nama Akun': account.accountName,
                     'Nama Robot/EA': account.tradingRobotName || 'N/A',
                     'Total trade': totalTrades,
@@ -367,34 +375,18 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
                     'Presentase (%)': percentagePL
                 };
             });
-            historyToProcess = data;
-            periodLabel = 'Bulanan';
-        }
-        
-        // Bagian pembuatan file Excel tidak berubah, namun kita perlu menambahkan ringkasan
-        const totalPLGlobal = historyToProcess.reduce((sum, item) => sum + item['Total Profit/Loss'], 0);
-        const totalTradesGlobal = historyToProcess.reduce((sum, item) => sum + item['Total trade' || 'Total Transaksi'], 0);
-        
-        // Untuk win rate, kita perlu data mentah dari periode yang sesuai
-        let periodHistory;
-        if(period === 'weekly') {
-            const today = new Date();
-            const day = today.getDay();
-            const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-            const startOfWeek = new Date(today.setDate(diff));
-            startOfWeek.setHours(0, 0, 0, 0);
-            periodHistory = flattenHistory(tradeHistory).filter(t => t.type === 'trade' && new Date(t.closeDate.replace(/\./g, '-')) >= startOfWeek);
-        } else {
-            const today = new Date();
-            const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-            startOfMonth.setHours(0, 0, 0, 0);
-            periodHistory = flattenHistory(tradeHistory).filter(t => t.type === 'trade' && new Date(t.closeDate.replace(/\./g, '-')) >= startOfMonth);
         }
 
+        if (tableData.length === 0) {
+            alert(alertMessage);
+            return;
+        }
+
+        // 3. Hitung Statistik untuk Ringkasan Global
+        const totalPLGlobal = periodHistory.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
+        const totalTradesGlobal = periodHistory.length;
         const winningTrades = periodHistory.filter(trade => (parseFloat(trade.pl) || 0) > 0).length;
-        const winRate = periodHistory.length > 0 ? (winningTrades / periodHistory.length) * 100 : 0;
-        
-        const summaryTitle = period === 'weekly' ? 'Ringkasan Global (Minggu Ini)' : `Ringkasan Global (${new Date().toLocaleString('id-ID', { month: 'long' })})`;
+        const winRate = totalTradesGlobal > 0 ? (winningTrades / totalTradesGlobal) * 100 : 0;
 
         const summaryData = [
             { "Statistik": summaryTitle, "Nilai": "" },
@@ -403,20 +395,25 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
             { "Statistik": "Win Rate", "Nilai": winRate }
         ];
 
+        // 4. Buat file Excel
         const worksheet = XLSX.utils.json_to_sheet(summaryData, { skipHeader: false });
-        XLSX.utils.sheet_add_json(worksheet, historyToProcess, { origin: 'A6' });
+        XLSX.utils.sheet_add_json(worksheet, tableData, { origin: 'A6' });
 
-        worksheet[XLSX.utils.encode_cell({c: 1, r: 1})].z = '$#,##0.00';
-        worksheet[XLSX.utils.encode_cell({c: 1, r: 3})].z = '0.00"%"';
+        // --- KODE PERBAIKAN: Memperbaiki format kolom ---
+        worksheet[XLSX.utils.encode_cell({c: 1, r: 1})].z = '$#,##0.00'; // Format P/L di ringkasan
+        worksheet[XLSX.utils.encode_cell({c: 1, r: 3})].z = '0.00"%"';   // Format Win Rate di ringkasan
         
         const range = XLSX.utils.decode_range(worksheet['!ref']);
-        for (let R = 5; R <= range.e.r; ++R) {
-            const plCellRef = XLSX.utils.encode_cell({c: (period === 'weekly' ? 5 : 6), r: R});
+        for (let R = 5; R <= range.e.r; ++R) { // Mulai dari baris ke-6 (indeks 5)
+            // Kolom P/L (Total P/L atau Total Profit/Loss) selalu ada di kolom ke-6 (indeks 5)
+            const plCellRef = XLSX.utils.encode_cell({c: 5, r: R}); 
             if(worksheet[plCellRef]) worksheet[plCellRef].z = '$#,##0.00';
             
-            const pctCellRef = XLSX.utils.encode_cell({c: (period === 'weekly' ? 6 : 7), r: R});
+            // Kolom Persentase selalu ada di kolom ke-7 (indeks 6)
+            const pctCellRef = XLSX.utils.encode_cell({c: 6, r: R});
             if(worksheet[pctCellRef]) worksheet[pctCellRef].z = '0.00"%"';
         }
+        // --- AKHIR PERBAIKAN ---
 
         worksheet['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
         const workbook = XLSX.utils.book_new();
