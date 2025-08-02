@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing, LoaderCircle } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
+import { Briefcase, TrendingUp, TrendingDown, DollarSign, List, Clock, Search, X, CheckCircle, Bell, Activity, Check, Power, Trash2, Volume2, VolumeX, BellRing, LoaderCircle, ArrowUpCircle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue } from "firebase/database";
 import { firebaseConfig } from './firebaseConfig';
@@ -52,6 +52,51 @@ const flattenHistory = (tradeHistory) => {
         }
     });
     return flatHistory;
+};
+
+
+// --- KOMPONEN BARU: Tombol Kembali ke Atas ---
+const ScrollToTopButton = ({ scrollableRef }) => {
+    const [isVisible, setIsVisible] = useState(false);
+
+    const handleScroll = useCallback(() => {
+        if (scrollableRef.current && scrollableRef.current.scrollTop > 300) {
+            setIsVisible(true);
+        } else {
+            setIsVisible(false);
+        }
+    }, [scrollableRef]);
+
+    const scrollToTop = () => {
+        if (scrollableRef.current) {
+            scrollableRef.current.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+    };
+
+    useEffect(() => {
+        const scrollableElement = scrollableRef.current;
+        if (scrollableElement) {
+            scrollableElement.addEventListener('scroll', handleScroll);
+        }
+        return () => {
+            if (scrollableElement) {
+                scrollableElement.removeEventListener('scroll', handleScroll);
+            }
+        };
+    }, [scrollableRef, handleScroll]);
+
+    return (
+        <button
+            onClick={scrollToTop}
+            className={`fixed bottom-24 right-4 z-40 p-3 rounded-full bg-blue-600 text-white shadow-lg transition-all duration-300 hover:bg-blue-700 hover:scale-110 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-0 pointer-events-none'}`}
+            title="Kembali ke atas"
+        >
+            <ArrowUpCircle size={24} />
+        </button>
+    );
 };
 
 
@@ -251,7 +296,6 @@ const AccountCard = ({ account, onToggleRobot, onDelete, onCancelOrder, onCardCl
                     )}
                 </div>
             </div>
-            {/* --- KODE PERBAIKAN: Tombol hapus dipindahkan ke kiri bawah --- */}
             <button onClick={(e) => { e.stopPropagation(); onDelete(account.accountId, account.accountName); }} title="Hapus Akun" className="absolute bottom-3 left-3 p-1 rounded-full text-slate-600 hover:bg-slate-900/50 hover:text-red-500 transition-all duration-200 opacity-50 hover:opacity-100">
                 <Trash2 size={16} />
             </button>
@@ -304,32 +348,15 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
     }, [accounts, tradeHistory, historyResetTimestamp]);
 
     const handleDownload = (period) => {
-        // 1. Ambil dan siapkan data riwayat dasar
-        const allHistory = flattenHistory(tradeHistory).filter(trade => trade && trade.type === 'trade');
-
-        let periodHistory;
-        let tableData;
+        let historyToProcess;
         let periodLabel;
-        let summaryTitle;
-        let alertMessage;
 
         if (period === 'weekly') {
-            periodLabel = 'Mingguan';
-            summaryTitle = 'Ringkasan Global (Minggu Ini)';
-            alertMessage = 'Tidak ada data mingguan untuk diunduh.';
-            
-            const today = new Date();
-            const day = today.getDay();
-            const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-            const startOfWeek = new Date(today.setDate(diff));
-            startOfWeek.setHours(0, 0, 0, 0);
-            
-            periodHistory = allHistory.filter(trade => {
-                const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
-                return !isNaN(tradeDate) && tradeDate >= startOfWeek;
-            });
-            
-            tableData = accountSummary.map((summary, index) => ({
+            if (accountSummary.length === 0) {
+                alert("Tidak ada data mingguan untuk diunduh.");
+                return;
+            }
+            const data = accountSummary.map((summary, index) => ({
                 'No.': index + 1,
                 'Periode': 'Minggu Ini (Sejak Senin)',
                 'Nama Akun': summary.name,
@@ -338,33 +365,38 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
                 'Total P/L': summary.totalPL,
                 'Presentase (%)': summary.percentagePL
             }));
+            historyToProcess = data;
+            periodLabel = 'Mingguan';
+        } else {
+            let allHistory = flattenHistory(tradeHistory);
+            const filteredAllHistory = allHistory.filter(trade => trade && trade.type === 'trade');
 
-        } else { // Untuk bulanan
-            periodLabel = 'Bulanan';
-            summaryTitle = `Ringkasan Global (${new Date().toLocaleString('id-ID', { month: 'long' })})`;
-            alertMessage = `Tidak ada data riwayat di bulan ${new Date().toLocaleString('id-ID', { month: 'long' })} untuk diunduh.`;
+            const oneMonthAgo = new Date();
+            oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
 
-            const today = new Date();
-            const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-            startOfMonth.setHours(0, 0, 0, 0);
-            
-            periodHistory = allHistory.filter(trade => {
+            const monthlyHistory = filteredAllHistory.filter(trade => {
+                if (!trade || typeof trade.closeDate !== 'string') return false;
                 const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
-                return !isNaN(tradeDate) && tradeDate >= startOfMonth;
+                return !isNaN(tradeDate) && tradeDate >= oneMonthAgo;
             });
-
-            const historyMap = periodHistory.reduce((acc, trade) => {
+            if (monthlyHistory.length === 0) {
+                alert("Tidak ada data riwayat dalam 30 hari terakhir untuk diunduh.");
+                return;
+            }
+            const historyMap = monthlyHistory.reduce((acc, trade) => {
                 const accountName = trade.accountName;
                 if (!acc[accountName]) acc[accountName] = [];
                 acc[accountName].push(trade);
                 return acc;
             }, {});
-            tableData = accounts.map((account, index) => {
+            const data = accounts.map((account, index) => {
                 const trades = historyMap[account.accountName] || [];
                 const totalPL = trades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
                 const totalTrades = trades.length;
+                
                 const currentBalance = account.balance || 0;
                 const percentagePL = currentBalance > 0 ? (totalPL / currentBalance) * 100 : 0;
+
                 return {
                     'No.': index + 1,
                     'Periode': new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' }),
@@ -375,47 +407,12 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
                     'Presentase (%)': percentagePL
                 };
             });
+            historyToProcess = data;
+            periodLabel = 'Bulanan';
         }
 
-        if (tableData.length === 0) {
-            alert(alertMessage);
-            return;
-        }
-
-        // 3. Hitung Statistik untuk Ringkasan Global
-        const totalPLGlobal = periodHistory.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
-        const totalTradesGlobal = periodHistory.length;
-        const winningTrades = periodHistory.filter(trade => (parseFloat(trade.pl) || 0) > 0).length;
-        const winRate = totalTradesGlobal > 0 ? (winningTrades / totalTradesGlobal) * 100 : 0;
-
-        const summaryData = [
-            { "Statistik": summaryTitle, "Nilai": "" },
-            { "Statistik": "Total Profit/Loss", "Nilai": totalPLGlobal },
-            { "Statistik": "Total Transaksi", "Nilai": totalTradesGlobal },
-            { "Statistik": "Win Rate", "Nilai": winRate }
-        ];
-
-        // 4. Buat file Excel
-        const worksheet = XLSX.utils.json_to_sheet(summaryData, { skipHeader: false });
-        XLSX.utils.sheet_add_json(worksheet, tableData, { origin: 'A6' });
-
-        // --- KODE PERBAIKAN: Memperbaiki format kolom ---
-        worksheet[XLSX.utils.encode_cell({c: 1, r: 1})].z = '$#,##0.00'; // Format P/L di ringkasan
-        worksheet[XLSX.utils.encode_cell({c: 1, r: 3})].z = '0.00"%"';   // Format Win Rate di ringkasan
-        
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
-        for (let R = 5; R <= range.e.r; ++R) { // Mulai dari baris ke-6 (indeks 5)
-            // Kolom P/L (Total P/L atau Total Profit/Loss) selalu ada di kolom ke-6 (indeks 5)
-            const plCellRef = XLSX.utils.encode_cell({c: 5, r: R}); 
-            if(worksheet[plCellRef]) worksheet[plCellRef].z = '$#,##0.00';
-            
-            // Kolom Persentase selalu ada di kolom ke-7 (indeks 6)
-            const pctCellRef = XLSX.utils.encode_cell({c: 6, r: R});
-            if(worksheet[pctCellRef]) worksheet[pctCellRef].z = '0.00"%"';
-        }
-        // --- AKHIR PERBAIKAN ---
-
-        worksheet['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+        const worksheet = XLSX.utils.json_to_sheet(historyToProcess);
+        worksheet['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, `Ringkasan ${periodLabel}`);
         XLSX.writeFile(workbook, `Ringkasan_Trading_${periodLabel}.xlsx`);
@@ -623,6 +620,27 @@ export default function App() {
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [togglingRobotId, setTogglingRobotId] = useState(null);
     const [showEaDeleteInfo, setShowEaDeleteInfo] = useState({ isOpen: false, eaName: '', eaId: null });
+    
+    // --- KODE PERBAIKAN: Menambahkan ref dan logika untuk menyimpan/mengembalikan posisi scroll ---
+    const mainContentRef = useRef(null);
+    const scrollPositions = useRef({ dashboard: 0, history: 0, eaOverview: 0 });
+
+    const handlePageChange = (newPage) => {
+        if (mainContentRef.current) {
+            // Simpan posisi scroll halaman saat ini sebelum berganti
+            scrollPositions.current[page] = mainContentRef.current.scrollTop;
+        }
+        setPage(newPage);
+    };
+
+    // Gunakan useLayoutEffect untuk memastikan scroll diatur setelah render tapi sebelum browser melukis
+    useLayoutEffect(() => {
+        if (mainContentRef.current) {
+            // Kembalikan ke posisi scroll yang tersimpan untuk halaman baru
+            mainContentRef.current.scrollTop = scrollPositions.current[page] || 0;
+        }
+    }, [page]);
+    // --- AKHIR PERBAIKAN ---
 
     const addNotification = (title, message, type) => setNotifications(prev => [{ id: Date.now(), title, message, type }, ...prev].slice(0, 5));
     const removeNotification = useCallback((id) => {
@@ -815,7 +833,6 @@ export default function App() {
         });
         
         return Array.from(eaMap.values()).map(ea => {
-            // Filter history for this EA to only include trading transactions
             const eaTradingHistory = ea.history.filter(t => t.type === 'trade');
             const totalTrades = eaTradingHistory.length;
             const winningTrades = eaTradingHistory.filter(t => parseFloat(t.pl) > 0).length;
@@ -836,42 +853,40 @@ export default function App() {
         });
     }, [accountsData, tradeHistory]);
 
+    // --- KODE PERBAIKAN: Mengubah struktur layout utama ---
     return (
-        <div className="bg-slate-900 min-h-screen text-white font-sans">
+        <div className="bg-slate-900 text-white font-sans h-screen flex flex-col overflow-hidden">
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Inter:wght@400;700;900&display=swap');
+                body { font-family: 'Inter', sans-serif; background-color: #020617; }
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 20px; }
+                .font-mono { font-family: 'Roboto Mono', monospace; }
+            `}</style>
+            
             <InfoBanner />
-            <div className="p-4 sm:p-6 lg:p-8">
-                <style>{`
-                    @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Inter:wght@400;700;900&display=swap');
-                    body { font-family: 'Inter', sans-serif; background-color: #020617; }
-                    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-                    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 20px; }
-                    .font-mono { font-family: 'Roboto Mono', monospace; }
-                    @keyframes float {
-                        0% { transform: translateY(0px); }
-                        50% { transform: translateY(-10px); }
-                        100% { transform: translateY(0px); }
-                    }
-                    .animate-float {
-                        animation: float 6s ease-in-out infinite;
-                    }
-                `}</style>
-                <div className="max-w-7xl mx-auto">
-                    <header className="mb-8 flex flex-wrap justify-between items-center gap-4">
-                        {page !== 'ea-overview' ? (
-                            <div>
-                                <h1 className="text-3xl font-bold text-white">MJA Monitoring</h1>
-                                <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
+
+            {/* Area Konten yang Bisa di-scroll */}
+            <div ref={mainContentRef} className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="p-4 sm:p-6 lg:p-8">
+                    <div className="max-w-7xl mx-auto">
+                        <header className="mb-8 flex flex-wrap justify-between items-center gap-4">
+                            {page !== 'ea-overview' ? (
+                                <div>
+                                    <h1 className="text-3xl font-bold text-white">MJA Monitoring</h1>
+                                    <p className="text-slate-400 mt-1">Ringkasan global dan status akun individual.</p>
+                                </div>
+                            ) : <div />}
+                            <div className="flex items-center gap-3">
+                                <button onClick={handleNotifToggle} title="Notifikasi Browser" className={`p-2 rounded-lg transition-all duration-300 ${isNotifEnabled && notifPermission === 'granted' ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}><BellRing size={20} /></button>
+                                <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} title="Pemberitahuan Suara" className={`p-2 rounded-lg transition-all duration-300 ${isSoundEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}</button>
                             </div>
-                        ) : <div />}
-                        <div className="flex items-center gap-3">
-                            <button onClick={handleNotifToggle} title="Notifikasi Browser" className={`p-2 rounded-lg transition-all duration-300 ${isNotifEnabled && notifPermission === 'granted' ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}><BellRing size={20} /></button>
-                            <button onClick={() => setIsSoundEnabled(!isSoundEnabled)} title="Pemberitahuan Suara" className={`p-2 rounded-lg transition-all duration-300 ${isSoundEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{isSoundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}</button>
-                        </div>
-                    </header>
-                    <main>
-                        {page === 'dashboard' && (
-                            <>
+                        </header>
+                        
+                        {/* Kontainer untuk setiap halaman agar scroll position terpisah */}
+                        <main>
+                            <div style={{ display: page === 'dashboard' ? 'block' : 'none' }}>
                                 <div className="mb-8 relative">
                                     <input type="text" placeholder="Cari nama akun atau nama EA..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg py-3 pl-12 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -882,43 +897,40 @@ export default function App() {
                                         <AccountCard key={account.id} account={account} onToggleRobot={handleToggleRobot} onDelete={openDeleteModal} onCancelOrder={handleCancelOrder} onCardClick={openDetailModal} index={index} handleDragStart={handleDragStart} handleDragEnter={handleDragEnter} handleDragEnd={handleDragEnd} isDragging={dragging && dragItem.current === index} togglingRobotId={togglingRobotId} />
                                     ))}
                                 </div>
-                            </>
-                        )}
-                        {page === 'history' && (
-                            <>
-                                <GlobalSummary
-                                    accounts={accounts}
-                                    tradeHistory={tradeHistory}
-                                    historyResetTimestamp={historyResetTimestamp}
-                                />
-                                <HistoryPage
-                                    accounts={accounts}
-                                    tradeHistory={tradeHistory}
-                                    addNotification={addNotification}
-                                    historyResetTimestamp={historyResetTimestamp}
-                                    onResetRequest={() => setShowResetConfirm(true)}
-                                />
-                            </>
-                        )}
-                        {page === 'ea-overview' && <EAOverviewPage eaData={eaOverviewData} onDeleteEa={openEaDeleteInfoModal} />}
-                    </main>
-                    <div className="h-24" />
+                            </div>
+
+                            <div style={{ display: page === 'history' ? 'block' : 'none' }}>
+                                <GlobalSummary accounts={accounts} tradeHistory={tradeHistory} historyResetTimestamp={historyResetTimestamp} />
+                                <HistoryPage accounts={accounts} tradeHistory={tradeHistory} addNotification={addNotification} historyResetTimestamp={historyResetTimestamp} onResetRequest={() => setShowResetConfirm(true)} />
+                            </div>
+
+                            <div style={{ display: page === 'ea-overview' ? 'block' : 'none' }}>
+                                <EAOverviewPage eaData={eaOverviewData} onDeleteEa={openEaDeleteInfoModal} />
+                            </div>
+                        </main>
+                        
+                        <div className="h-24" /> {/* Spacer untuk navigasi bawah */}
+                    </div>
                 </div>
-                <NotificationToastContainer notifications={notifications} removeNotification={removeNotification} />
-                <ConfirmationModal isOpen={deleteModal.isOpen} title="Konfirmasi Penghapusan" message={`Apakah Anda yakin ingin menghapus akun "${deleteModal.accountName}"? Tindakan ini akan menghapus data dari dasbor. Anda juga harus mematikan EA di akun ini agar tidak muncul kembali.`} onConfirm={handleDeleteAccount} onCancel={closeDeleteModal} confirmColorClass="from-red-500 to-orange-600" />
-                <ConfirmationModal isOpen={showResetConfirm} title="Konfirmasi Reset Tampilan" message="Apakah Anda yakin ingin mereset tampilan riwayat? Ini hanya akan menampilkan data baru yang masuk setelah ini." onConfirm={handleConfirmReset} onCancel={() => setShowResetConfirm(false)} confirmText="Ya, Reset" confirmColorClass="from-sky-500 to-blue-600" />
-                <ConfirmationModal
-                    isOpen={showEaDeleteInfo.isOpen}
-                    title={`Cara Menghapus Robot "${showEaDeleteInfo.eaName}"`}
-                    message={`Untuk menghapus robot dengan Magic Number (${showEaDeleteInfo.eaId}) ini, Anda harus menghentikan atau menghapus EA dari semua akun yang menggunakannya di terminal MetaTrader Anda. Dasbor akan diperbarui secara otomatis.`}
-                    onConfirm={closeEaDeleteInfoModal}
-                    onCancel={null}
-                    confirmText="Mengerti"
-                    confirmColorClass="bg-blue-600 hover:bg-blue-700"
-                />
-                <AccountDetailModal isOpen={detailModal.isOpen} onClose={closeDetailModal} account={detailModal.account} tradeHistory={tradeHistory} />
             </div>
-            <BottomNav activePage={page} setPage={setPage} />
+            
+            <BottomNav activePage={page} setPage={handlePageChange} />
+            <ScrollToTopButton scrollableRef={mainContentRef} />
+
+            {/* Modal dan Notifikasi tetap di luar area scroll */}
+            <NotificationToastContainer notifications={notifications} removeNotification={removeNotification} />
+            <ConfirmationModal isOpen={deleteModal.isOpen} title="Konfirmasi Penghapusan" message={`Apakah Anda yakin ingin menghapus akun "${deleteModal.accountName}"? Tindakan ini akan menghapus data dari dasbor. Anda juga harus mematikan EA di akun ini agar tidak muncul kembali.`} onConfirm={handleDeleteAccount} onCancel={closeDeleteModal} confirmColorClass="from-red-500 to-orange-600" />
+            <ConfirmationModal isOpen={showResetConfirm} title="Konfirmasi Reset Tampilan" message="Apakah Anda yakin ingin mereset tampilan riwayat? Ini hanya akan menampilkan data baru yang masuk setelah ini." onConfirm={handleConfirmReset} onCancel={() => setShowResetConfirm(false)} confirmText="Ya, Reset" confirmColorClass="from-sky-500 to-blue-600" />
+            <ConfirmationModal
+                isOpen={showEaDeleteInfo.isOpen}
+                title={`Cara Menghapus Robot "${showEaDeleteInfo.eaName}"`}
+                message={`Untuk menghapus robot dengan Magic Number (${showEaDeleteInfo.eaId}) ini, Anda harus menghentikan atau menghapus EA dari semua akun yang menggunakannya di terminal MetaTrader Anda. Dasbor akan diperbarui secara otomatis.`}
+                onConfirm={closeEaDeleteInfoModal}
+                onCancel={null}
+                confirmText="Mengerti"
+                confirmColorClass="bg-blue-600 hover:bg-blue-700"
+            />
+            <AccountDetailModal isOpen={detailModal.isOpen} onClose={closeDetailModal} account={detailModal.account} tradeHistory={tradeHistory} />
         </div>
     );
 }
