@@ -35,23 +35,17 @@ const getEaIdentifier = (account) => {
 // --- Fungsi Pembantu Universal untuk Memproses Riwayat ---
 const flattenHistory = (historyObject) => {
     const data = historyObject || {};
-    const flatList = [];
+    let flatList = [];
     if (typeof data !== 'object' || data === null) {
         return flatList;
     }
 
-    Object.keys(data).forEach(key1 => {
-        const level2 = data[key1];
-        if (typeof level2 === 'object' && level2 !== null) {
-            Object.keys(level2).forEach(key2 => {
-                const item = level2[key2];
-                if (typeof item === 'object' && item !== null) {
-                    flatList.push(item);
-                }
-            });
+    Object.values(data).forEach(accountHistory => {
+        if (typeof accountHistory === 'object' && accountHistory !== null) {
+            flatList.push(...Object.values(accountHistory));
         }
     });
-    return flatList;
+    return flatList.filter(item => item !== null && typeof item === 'object');
 };
 
 
@@ -306,7 +300,8 @@ const AccountCard = ({ account, onToggleRobot, onDelete, onCancelOrder, onCardCl
 const HistoryPage = ({ accounts, tradeHistory, activityLogs, addNotification, historyResetTimestamp, onResetRequest }) => {
     const accountSummary = useMemo(() => {
         let relevantHistory = flattenHistory(tradeHistory);
-        relevantHistory = relevantHistory.filter(trade => trade && trade.type === 'trade');
+        // --- PERBAIKAN: Filter yang lebih fleksibel ---
+        relevantHistory = relevantHistory.filter(trade => trade && trade.type !== 'balance');
 
         if (historyResetTimestamp) {
             relevantHistory = relevantHistory.filter(trade => {
@@ -347,8 +342,11 @@ const HistoryPage = ({ accounts, tradeHistory, activityLogs, addNotification, hi
     }, [accounts, tradeHistory, historyResetTimestamp]);
 
     const handleDownload = (period) => {
-        const allHistory = flattenHistory(tradeHistory).filter(trade => trade && trade.type === 'trade');
+        const allHistory = flattenHistory(tradeHistory);
         const allActivityLogs = flattenHistory(activityLogs);
+        
+        // --- PERBAIKAN: Filter yang lebih fleksibel ---
+        const allTrades = allHistory.filter(trade => trade && trade.type !== 'balance');
         
         let periodHistory, tableData, periodLabel, summaryTitle, alertMessage;
 
@@ -363,7 +361,7 @@ const HistoryPage = ({ accounts, tradeHistory, activityLogs, addNotification, hi
             const startOfWeek = new Date(today.setDate(diff));
             startOfWeek.setHours(0, 0, 0, 0);
             
-            periodHistory = allHistory.filter(trade => new Date(trade.closeDate.replace(/\./g, '-')) >= startOfWeek);
+            periodHistory = allTrades.filter(trade => new Date(trade.closeDate.replace(/\./g, '-')) >= startOfWeek);
             const periodActivity = allActivityLogs.filter(log => log.timestamp >= startOfWeek.getTime());
 
             tableData = accounts.map((account, index) => {
@@ -408,7 +406,7 @@ const HistoryPage = ({ accounts, tradeHistory, activityLogs, addNotification, hi
 
             const oneMonthAgo = new Date();
             oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-            periodHistory = allHistory.filter(trade => new Date(trade.closeDate.replace(/\./g, '-')) >= oneMonthAgo);
+            periodHistory = allTrades.filter(trade => new Date(trade.closeDate.replace(/\./g, '-')) >= oneMonthAgo);
             
             const periodActivity = allActivityLogs.filter(log => log.timestamp >= oneMonthAgo.getTime());
 
@@ -546,6 +544,8 @@ const GlobalSummary = ({ accounts, tradeHistory, historyResetTimestamp }) => {
         if (!tradeHistory || !accounts.length) return { totalPL: 0, totalTrades: 0, winRate: 0 };
         
         let allHistory = flattenHistory(tradeHistory);
+        // --- PERBAIKAN: Filter yang lebih fleksibel ---
+        allHistory = allHistory.filter(trade => trade && trade.type !== 'balance');
 
         if (historyResetTimestamp) {
             allHistory = allHistory.filter(trade => {
@@ -567,7 +567,7 @@ const GlobalSummary = ({ accounts, tradeHistory, historyResetTimestamp }) => {
             if (!trade || typeof trade.closeDate !== 'string') return;
             const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
             
-            if (!isNaN(tradeDate) && tradeDate >= startOfWeek && trade.type === 'trade') {
+            if (!isNaN(tradeDate) && tradeDate >= startOfWeek) {
                 const profit = parseFloat(trade.pl) || 0;
                 totalPL += profit;
                 totalTrades++;
@@ -604,11 +604,12 @@ const AccountDetailModal = ({ isOpen, onClose, account, tradeHistory }) => {
         if (!isOpen || !account || !tradeHistory) return [];
         
         let allHistory = flattenHistory(tradeHistory);
+        // --- PERBAIKAN: Filter yang lebih fleksibel ---
+        allHistory = allHistory.filter(trade => trade && trade.type !== 'balance');
 
         return allHistory.filter(trade => 
             trade && 
-            trade.accountName === account.accountName &&
-            trade.type === 'trade'
+            trade.accountName === account.accountName
         ).sort((a, b) => new Date(b.closeDate.replace(/\./g, '-')) - new Date(a.closeDate.replace(/\./g, '-')));
     }, [isOpen, account, tradeHistory]);
 
@@ -698,7 +699,7 @@ export default function App() {
     const dragOverItem = useRef(null);
     const [dragging, setDragging] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
-    const [togglingRobotId, setTogglingRobotId] = useState(null); // <-- DIKEMBALIKAN
+    const [togglingRobotId, setTogglingRobotId] = useState(null);
     const [showEaDeleteInfo, setShowEaDeleteInfo] = useState({ isOpen: false, eaName: '', eaId: null });
     
     const mainContentRef = useRef(null);
@@ -769,9 +770,8 @@ export default function App() {
     };
     const handleToggleRobot = async (accountId, newStatus) => {
         const originalAccountsData = { ...accountsData };
-        setTogglingRobotId(accountId); // <-- EFEK LOADING DIMULAI
+        setTogglingRobotId(accountId);
         try {
-            // Pembaruan optimistis tetap dilakukan, namun tanpa mengubah state loading
             setAccountsData(prev => {
                 const newAccountsData = JSON.parse(JSON.stringify(prev));
                 if(newAccountsData[accountId]) {
@@ -784,10 +784,9 @@ export default function App() {
             addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
             setAccountsData(originalAccountsData);
         } finally {
-            // Hentikan loading setelah beberapa saat agar transisi terlihat
             setTimeout(() => {
-                setTogglingRobotId(null); // <-- EFEK LOADING BERHENTI
-            }, 500); // Jeda 0.5 detik
+                setTogglingRobotId(null);
+            }, 500);
         }
     };
     const openDeleteModal = (accountId, accountName) => setDeleteModal({ isOpen: true, accountId, accountName });

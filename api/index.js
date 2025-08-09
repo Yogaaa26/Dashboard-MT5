@@ -1,12 +1,12 @@
 // /api/index.js
-// Versi final dengan perbaikan logika duplikasi menggunakan .set() saja
+// Versi yang dikembalikan ke awal, dengan penambahan endpoint log-activity
 
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const app = express();
 
-let db;
+let db; // Deklarasikan db di scope yang lebih tinggi
 
 // --- Inisialisasi Firebase Admin yang Lebih Aman ---
 try {
@@ -29,6 +29,7 @@ try {
 
 app.use(cors());
 
+// Middleware untuk memeriksa koneksi DB
 const checkDbConnection = (req, res, next) => {
     if (!db) {
         return res.status(500).send({ error: 'Koneksi database gagal. Periksa log server.' });
@@ -36,17 +37,23 @@ const checkDbConnection = (req, res, next) => {
     next();
 };
 
+// Terapkan middleware ke semua rute
 app.use('/api', checkDbConnection);
 
+
+// --- FUNGSI PEMBANTU UNTUK EKSTRAKSI JSON ---
 const extractJsonFromString = (rawString) => {
-    const match = rawString.match(/\{.*\}/);
+    // Membersihkan karakter null dan spasi berlebih
+    const cleanString = rawString.replace(/\0/g, '').trim();
+    const match = cleanString.match(/\{.*\}/);
     if (match && match[0]) {
         return JSON.parse(match[0]);
     }
     throw new Error("JSON yang valid tidak ditemukan di dalam string.");
 };
 
-// --- ENDPOINTS ---
+
+// --- Endpoint yang Sudah Ada ---
 
 app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
@@ -66,12 +73,11 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
             res.json({ status: 'ok', command: 'none' });
         }
     } catch (error) {
-        console.error("Error di /api/update:", error.message, "Body Mentah:", rawBody);
+        console.error("Error di /api/update:", error.message);
         res.status(400).send({ error: 'Gagal memproses data update.' });
     }
 });
 
-// --- PERBAIKAN DI SINI: Hanya menggunakan .set() untuk menimpa data ---
 app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
     try {
@@ -80,30 +86,15 @@ app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
             return res.status(400).send({ error: 'Data riwayat tidak valid' });
         }
         
-        const historyRef = db.ref(`trade_history/${accountId}`);
-        
-        const cleanHistoryObject = {};
-        history.forEach(item => {
-            if (item.ticket) {
-                cleanHistoryObject[item.ticket] = item;
-            } else {
-                const uniqueKey = `balance_${item.closeDate.replace(/[^0-9]/g, '')}_${item.pl}`;
-                cleanHistoryObject[uniqueKey] = item;
-            }
-        });
-
-        // Gunakan set() untuk menimpa seluruh data lama dengan data baru yang sudah bersih.
-        // Ini adalah operasi tunggal yang andal.
-        await historyRef.set(cleanHistoryObject);
-        
+        await db.ref(`trade_history/${accountId}`).set(history);
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
     } catch (error) {
-        console.error('Gagal menyimpan riwayat:', error.message, "Body Mentah:", rawBody);
+        console.error('Gagal menyimpan riwayat:', error.message);
         res.status(500).send({ error: 'Gagal menyimpan riwayat ke server.' });
     }
 });
-// --- AKHIR DARI PERBAIKAN ---
 
+// --- ENDPOINT BARU UNTUK LOG AKTIVITAS (HEARTBEAT) ---
 app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
     try {
@@ -122,11 +113,13 @@ app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => 
 
         res.status(200).json({ message: 'Activity logged successfully' });
     } catch (error) {
-        console.error('Error logging activity:', error.message, "Body Mentah:", rawBody);
+        console.error('Error logging activity:', error.message);
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
 
+
+// --- Endpoint Lainnya ---
 
 app.get('/api/accounts', async (req, res) => {
     try {
@@ -160,7 +153,7 @@ app.post('/api/save-order', express.json(), async (req, res) => {
         await db.ref('dashboard_config/accountOrder').set(order);
         res.status(200).json({ message: 'Urutan berhasil disimpan' });
     } catch (error) {
-        res.status(500).send({ error: 'Gagal menyimpan urutan ke server.' })
+        res.status(500).send({ error: 'Gagal menyimpan urutan ke server.' });
     }
 });
 
