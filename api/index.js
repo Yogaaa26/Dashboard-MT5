@@ -1,5 +1,5 @@
 // /api/index.js
-// Versi final dengan perbaikan logika untuk mencegah duplikasi data riwayat
+// Versi final dengan perbaikan logika duplikasi menggunakan .set() saja
 
 const express = require('express');
 const cors = require('cors');
@@ -71,7 +71,7 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     }
 });
 
-// --- PERBAIKAN DI SINI: Menggunakan .set() untuk menimpa data ---
+// --- PERBAIKAN DI SINI: Hanya menggunakan .set() untuk menimpa data ---
 app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
     try {
@@ -81,20 +81,19 @@ app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
         }
         
         const historyRef = db.ref(`trade_history/${accountId}`);
+        
         const cleanHistoryObject = {};
-
         history.forEach(item => {
-            // Gunakan tiket sebagai kunci unik untuk mencegah duplikasi internal
             if (item.ticket) {
                 cleanHistoryObject[item.ticket] = item;
             } else {
-                // Untuk deposit/withdraw, buat kunci unik dari timestamp & p/l
                 const uniqueKey = `balance_${item.closeDate.replace(/[^0-9]/g, '')}_${item.pl}`;
                 cleanHistoryObject[uniqueKey] = item;
             }
         });
 
-        // Gunakan set() untuk menimpa seluruh data lama dengan data baru yang sudah bersih
+        // Gunakan set() untuk menimpa seluruh data lama dengan data baru yang sudah bersih.
+        // Ini adalah operasi tunggal yang andal.
         await historyRef.set(cleanHistoryObject);
         
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
@@ -161,7 +160,7 @@ app.post('/api/save-order', express.json(), async (req, res) => {
         await db.ref('dashboard_config/accountOrder').set(order);
         res.status(200).json({ message: 'Urutan berhasil disimpan' });
     } catch (error) {
-        res.status(500).send({ error: 'Gagal menyimpan urutan ke server.' });
+        res.status(500).send({ error: 'Gagal menyimpan urutan ke server.' })
     }
 });
 
