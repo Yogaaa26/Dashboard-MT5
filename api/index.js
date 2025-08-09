@@ -1,12 +1,12 @@
 // /api/index.js
-// Versi final dengan parser yang lebih kuat untuk semua endpoint dari EA
+// Versi final dengan penggabungan endpoint log-activity
 
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const app = express();
 
-let db; // Deklarasikan db di scope yang lebih tinggi
+let db;
 
 // --- Inisialisasi Firebase Admin yang Lebih Aman ---
 try {
@@ -29,7 +29,6 @@ try {
 
 app.use(cors());
 
-// Middleware untuk memeriksa koneksi DB
 const checkDbConnection = (req, res, next) => {
     if (!db) {
         return res.status(500).send({ error: 'Koneksi database gagal. Periksa log server.' });
@@ -37,13 +36,9 @@ const checkDbConnection = (req, res, next) => {
     next();
 };
 
-// Terapkan middleware ke semua rute API
 app.use('/api', checkDbConnection);
 
-
-// --- FUNGSI PEMBANTU BARU UNTUK EKSTRAKSI JSON ---
 const extractJsonFromString = (rawString) => {
-    // Mencari string yang diawali dengan '{' dan diakhiri dengan '}'
     const match = rawString.match(/\{.*\}/);
     if (match && match[0]) {
         return JSON.parse(match[0]);
@@ -51,13 +46,12 @@ const extractJsonFromString = (rawString) => {
     throw new Error("JSON yang valid tidak ditemukan di dalam string.");
 };
 
-
-// --- Endpoint yang Diperbarui ---
+// --- ENDPOINTS ---
 
 app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
     try {
-        const data = extractJsonFromString(rawBody); // Menggunakan fungsi ekstraksi baru
+        const data = extractJsonFromString(rawBody);
         const accountId = data.accountId;
         if (!accountId) return res.status(400).send({ error: 'accountId dibutuhkan' });
         
@@ -80,7 +74,7 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
 app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
     try {
-        const { accountId, history } = extractJsonFromString(rawBody); // Menggunakan fungsi ekstraksi baru
+        const { accountId, history } = extractJsonFromString(rawBody);
         if (!accountId || !history || !Array.isArray(history)) {
             return res.status(400).send({ error: 'Data riwayat tidak valid' });
         }
@@ -88,15 +82,17 @@ app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
         const historyRef = db.ref(`trade_history/${accountId}`);
         const updates = {};
         history.forEach(item => {
+            // Menggunakan tiket sebagai kunci untuk mencegah duplikasi data
             if (item.ticket) {
                 updates[item.ticket] = item;
             } else {
+                // Untuk deposit/withdraw, gunakan push untuk ID unik
                 const pushRef = historyRef.push();
                 updates[pushRef.key] = item;
             }
         });
 
-        await historyRef.update(updates);
+        await historyRef.update(updates); // Gunakan update() agar tidak menimpa data lama
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
     } catch (error) {
         console.error('Gagal menyimpan riwayat:', error.message, "Body Mentah:", rawBody);
@@ -104,10 +100,11 @@ app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
     }
 });
 
+// --- ENDPOINT BARU YANG DIGABUNGKAN ---
 app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
     try {
-        const { accountId, magicNumber } = extractJsonFromString(rawBody); // Menggunakan fungsi ekstraksi baru
+        const { accountId, magicNumber } = extractJsonFromString(rawBody);
 
         if (accountId === undefined || magicNumber === undefined) {
             return res.status(400).json({ message: 'Missing accountId or magicNumber' });
@@ -126,9 +123,8 @@ app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => 
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+// --- AKHIR DARI ENDPOINT BARU ---
 
-
-// --- Endpoint Lain (Tidak Berubah) ---
 
 app.get('/api/accounts', async (req, res) => {
     try {
