@@ -1,5 +1,5 @@
 // /api/index.js
-// Versi final dengan penambahan endpoint /api/log-activity dan perbaikan log-history
+// Versi final dengan perbaikan parser untuk semua endpoint dari EA
 
 const express = require('express');
 const cors = require('cors');
@@ -37,13 +37,12 @@ const checkDbConnection = (req, res, next) => {
     next();
 };
 
-// Terapkan middleware ke semua rute
+// Terapkan middleware ke semua rute API
 app.use('/api', checkDbConnection);
 
 
 // --- Endpoint yang Sudah Ada ---
 
-// Endpoint ini secara khusus menggunakan parser RAW untuk membersihkan data dari EA
 app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
     try {
@@ -76,7 +75,6 @@ app.get('/api/accounts', async (req, res) => {
     }
 });
 
-// Endpoint di bawah ini secara eksplisit menggunakan parser JSON
 app.post('/api/robot-toggle', express.json(), async (req, res) => {
     const { accountId, newStatus } = req.body;
     await db.ref(`commands/${accountId}`).set({ command: 'toggle_robot', status: newStatus });
@@ -113,8 +111,6 @@ app.get('/api/get-order', async (req, res) => {
     }
 });
 
-// --- Endpoint untuk Riwayat ---
-
 app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
     try {
@@ -126,12 +122,9 @@ app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
         const historyRef = db.ref(`trade_history/${accountId}`);
         const updates = {};
         history.forEach(item => {
-            // Menggunakan push() akan menghasilkan ID unik, jadi kita buat sendiri
-            // berdasarkan tiket untuk mencegah duplikasi data
             if (item.ticket) {
                 updates[item.ticket] = item;
             } else {
-                // Untuk deposit/withdraw yang mungkin tidak punya tiket unik
                 const pushRef = historyRef.push();
                 updates[pushRef.key] = item;
             }
@@ -155,7 +148,6 @@ app.get('/api/get-history', async (req, res) => {
     }
 });
 
-// --- ENDPOINT UNTUK MEMBATALKAN ORDER ---
 app.post('/api/cancel-order', express.json(), async (req, res) => {
     const { accountId, ticket } = req.body;
     if (!accountId || !ticket) {
@@ -171,10 +163,11 @@ app.post('/api/cancel-order', express.json(), async (req, res) => {
     }
 });
 
-// --- ENDPOINT BARU UNTUK LOG AKTIVITAS (HEARTBEAT) ---
-app.post('/api/log-activity', express.json(), async (req, res) => {
+// --- PERBAIKAN DI SINI: Menggunakan parser RAW untuk log aktivitas ---
+app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => {
+    const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
     try {
-        const { accountId, magicNumber } = req.body;
+        const { accountId, magicNumber } = JSON.parse(rawBody);
 
         if (accountId === undefined || magicNumber === undefined) {
             return res.status(400).json({ message: 'Missing accountId or magicNumber' });
@@ -182,10 +175,9 @@ app.post('/api/log-activity', express.json(), async (req, res) => {
 
         const activityRef = db.ref(`robot_activity_logs/${accountId}`);
         
-        // Menggunakan push() untuk membuat ID unik untuk setiap log
         await activityRef.push({
             magicNumber: magicNumber,
-            timestamp: admin.database.ServerValue.TIMESTAMP, // Gunakan timestamp server
+            timestamp: admin.database.ServerValue.TIMESTAMP,
         });
 
         res.status(200).json({ message: 'Activity logged successfully' });
@@ -194,6 +186,7 @@ app.post('/api/log-activity', express.json(), async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+// --- AKHIR PERBAIKAN ---
 
 
 module.exports = app;
