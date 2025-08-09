@@ -1,5 +1,5 @@
 // /api/index.js
-// Versi final dengan penambahan endpoint /api/log-activity
+// Versi final dengan penambahan endpoint /api/log-activity dan perbaikan log-history
 
 const express = require('express');
 const cors = require('cors');
@@ -115,7 +115,6 @@ app.get('/api/get-order', async (req, res) => {
 
 // --- Endpoint untuk Riwayat ---
 
-// PERBAIKAN: Gunakan parser RAW untuk endpoint ini juga
 app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
     try {
@@ -124,12 +123,21 @@ app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
             return res.status(400).send({ error: 'Data riwayat tidak valid' });
         }
         
-        // Menggunakan push() untuk setiap item agar tidak menimpa data lama
         const historyRef = db.ref(`trade_history/${accountId}`);
-        for (const item of history) {
-            await historyRef.push(item);
-        }
-        
+        const updates = {};
+        history.forEach(item => {
+            // Menggunakan push() akan menghasilkan ID unik, jadi kita buat sendiri
+            // berdasarkan tiket untuk mencegah duplikasi data
+            if (item.ticket) {
+                updates[item.ticket] = item;
+            } else {
+                // Untuk deposit/withdraw yang mungkin tidak punya tiket unik
+                const pushRef = historyRef.push();
+                updates[pushRef.key] = item;
+            }
+        });
+
+        await historyRef.update(updates);
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
     } catch (error) {
         console.error('Gagal menyimpan riwayat:', error);
