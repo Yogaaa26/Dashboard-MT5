@@ -1,5 +1,5 @@
 // /api/index.js
-// Versi final dengan penggabungan endpoint log-activity
+// Versi final dengan perbaikan logika untuk mencegah duplikasi data riwayat
 
 const express = require('express');
 const cors = require('cors');
@@ -71,6 +71,7 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
     }
 });
 
+// --- PERBAIKAN DI SINI: Menggunakan .set() untuk menimpa data ---
 app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
     try {
@@ -80,27 +81,30 @@ app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
         }
         
         const historyRef = db.ref(`trade_history/${accountId}`);
-        const updates = {};
+        const cleanHistoryObject = {};
+
         history.forEach(item => {
-            // Menggunakan tiket sebagai kunci untuk mencegah duplikasi data
+            // Gunakan tiket sebagai kunci unik untuk mencegah duplikasi internal
             if (item.ticket) {
-                updates[item.ticket] = item;
+                cleanHistoryObject[item.ticket] = item;
             } else {
-                // Untuk deposit/withdraw, gunakan push untuk ID unik
-                const pushRef = historyRef.push();
-                updates[pushRef.key] = item;
+                // Untuk deposit/withdraw, buat kunci unik dari timestamp & p/l
+                const uniqueKey = `balance_${item.closeDate.replace(/[^0-9]/g, '')}_${item.pl}`;
+                cleanHistoryObject[uniqueKey] = item;
             }
         });
 
-        await historyRef.update(updates); // Gunakan update() agar tidak menimpa data lama
+        // Gunakan set() untuk menimpa seluruh data lama dengan data baru yang sudah bersih
+        await historyRef.set(cleanHistoryObject);
+        
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
     } catch (error) {
         console.error('Gagal menyimpan riwayat:', error.message, "Body Mentah:", rawBody);
         res.status(500).send({ error: 'Gagal menyimpan riwayat ke server.' });
     }
 });
+// --- AKHIR DARI PERBAIKAN ---
 
-// --- ENDPOINT BARU YANG DIGABUNGKAN ---
 app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => {
     const rawBody = req.body.toString('utf-8');
     try {
@@ -123,7 +127,6 @@ app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => 
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
-// --- AKHIR DARI ENDPOINT BARU ---
 
 
 app.get('/api/accounts', async (req, res) => {
