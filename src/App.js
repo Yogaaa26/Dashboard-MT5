@@ -33,25 +33,25 @@ const getEaIdentifier = (account) => {
 };
 
 // --- Fungsi Pembantu Universal untuk Memproses Riwayat ---
-const flattenHistory = (tradeHistory) => {
-    const historyData = tradeHistory || {};
-    const flatHistory = [];
-    if (typeof historyData !== 'object' || historyData === null) {
-        return flatHistory;
+const flattenHistory = (historyObject) => {
+    const data = historyObject || {};
+    const flatList = [];
+    if (typeof data !== 'object' || data === null) {
+        return flatList;
     }
 
-    Object.keys(historyData).forEach(accountId => {
-        const accountHistory = historyData[accountId];
-        if (typeof accountHistory === 'object' && accountHistory !== null) {
-            Object.keys(accountHistory).forEach(pushId => {
-                const transaction = accountHistory[pushId];
-                if (typeof transaction === 'object' && transaction !== null) {
-                    flatHistory.push(transaction);
+    Object.keys(data).forEach(key1 => {
+        const level2 = data[key1];
+        if (typeof level2 === 'object' && level2 !== null) {
+            Object.keys(level2).forEach(key2 => {
+                const item = level2[key2];
+                if (typeof item === 'object' && item !== null) {
+                    flatList.push(item);
                 }
             });
         }
     });
-    return flatHistory;
+    return flatList;
 };
 
 
@@ -303,7 +303,7 @@ const AccountCard = ({ account, onToggleRobot, onDelete, onCancelOrder, onCardCl
     );
 };
 
-const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTimestamp, onResetRequest }) => {
+const HistoryPage = ({ accounts, tradeHistory, activityLogs, addNotification, historyResetTimestamp, onResetRequest }) => {
     const accountSummary = useMemo(() => {
         let relevantHistory = flattenHistory(tradeHistory);
         relevantHistory = relevantHistory.filter(trade => trade && trade.type === 'trade');
@@ -317,7 +317,6 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
         }
 
         return accounts.map(account => {
-            // Logika untuk tampilan mingguan tetap berdasarkan kalender (sejak Senin)
             const today = new Date();
             const day = today.getDay();
             const diff = today.getDate() - day + (day === 0 ? -6 : 1);
@@ -348,71 +347,152 @@ const HistoryPage = ({ accounts, tradeHistory, addNotification, historyResetTime
     }, [accounts, tradeHistory, historyResetTimestamp]);
 
     const handleDownload = (period) => {
-        let historyToProcess;
-        let periodLabel;
+        const allHistory = flattenHistory(tradeHistory).filter(trade => trade && trade.type === 'trade');
+        const allActivityLogs = flattenHistory(activityLogs);
+        
+        let periodHistory, tableData, periodLabel, summaryTitle, alertMessage;
 
         if (period === 'weekly') {
-            if (accountSummary.length === 0) {
-                alert("Tidak ada data mingguan untuk diunduh.");
-                return;
-            }
-            const data = accountSummary.map((summary, index) => ({
-                'No.': index + 1,
-                'Periode': 'Minggu Ini (Sejak Senin)',
-                'Nama Akun': summary.name,
-                'Nama Robot/EA': summary.robotName,
-                'Total Transaksi': summary.totalOrders,
-                'Total P/L': summary.totalPL,
-                'Presentase (%)': summary.percentagePL
-            }));
-            historyToProcess = data;
             periodLabel = 'Mingguan';
+            summaryTitle = 'Ringkasan Global (Minggu Ini)';
+            alertMessage = 'Tidak ada data mingguan untuk diunduh.';
+            
+            const today = new Date();
+            const day = today.getDay();
+            const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+            const startOfWeek = new Date(today.setDate(diff));
+            startOfWeek.setHours(0, 0, 0, 0);
+            
+            periodHistory = allHistory.filter(trade => new Date(trade.closeDate.replace(/\./g, '-')) >= startOfWeek);
+            const periodActivity = allActivityLogs.filter(log => log.timestamp >= startOfWeek.getTime());
+
+            tableData = accounts.map((account, index) => {
+                const weeklyTrades = periodHistory.filter(trade => trade.accountName === account.accountName);
+                const totalPL = weeklyTrades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
+                const totalTrades = weeklyTrades.length;
+                const currentBalance = account.balance || 0;
+                const percentagePL = currentBalance > 0 ? (totalPL / currentBalance) * 100 : 0;
+                
+                const magicNumber = parseInt(getEaIdentifier(account));
+                const robotLogs = periodActivity.filter(log => log.magicNumber === magicNumber && log.accountId === account.accountId);
+                let activeHours = 0;
+                let tradeRatio = 0;
+
+                if (robotLogs.length > 1) {
+                    const timestamps = robotLogs.map(log => log.timestamp).sort((a,b) => a - b);
+                    const durationInMillis = timestamps[timestamps.length - 1] - timestamps[0];
+                    activeHours = durationInMillis / (1000 * 60 * 60);
+                    if (activeHours > 0) {
+                        tradeRatio = totalTrades / activeHours;
+                    }
+                }
+
+                return {
+                    'No.': index + 1,
+                    'Periode': 'Minggu Ini (Sejak Senin)',
+                    'Nama Akun': account.accountName,
+                    'Nama Robot/EA': account.tradingRobotName || 'N/A',
+                    'Est. Jam Aktif (jam)': activeHours.toFixed(2),
+                    'Rasio Trade/Jam': tradeRatio.toFixed(2),
+                    'Total Transaksi': totalTrades,
+                    'Total P/L': totalPL,
+                    'Presentase (%)': percentagePL,
+                    'Status': account.status === 'active' ? 'Floating' : 'Clear'
+                };
+            });
+
         } else {
-            let allHistory = flattenHistory(tradeHistory);
-            const filteredAllHistory = allHistory.filter(trade => trade && trade.type === 'trade');
+            periodLabel = 'Bulanan';
+            summaryTitle = 'Ringkasan Global (30 Hari Terakhir)';
+            alertMessage = 'Tidak ada data riwayat dalam 30 hari terakhir untuk diunduh.';
 
             const oneMonthAgo = new Date();
             oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+            periodHistory = allHistory.filter(trade => new Date(trade.closeDate.replace(/\./g, '-')) >= oneMonthAgo);
+            
+            const periodActivity = allActivityLogs.filter(log => log.timestamp >= oneMonthAgo.getTime());
 
-            const monthlyHistory = filteredAllHistory.filter(trade => {
-                if (!trade || typeof trade.closeDate !== 'string') return false;
-                const tradeDate = new Date(trade.closeDate.replace(/\./g, '-'));
-                return !isNaN(tradeDate) && tradeDate >= oneMonthAgo;
-            });
-            if (monthlyHistory.length === 0) {
-                alert("Tidak ada data riwayat dalam 30 hari terakhir untuk diunduh.");
-                return;
-            }
-            const historyMap = monthlyHistory.reduce((acc, trade) => {
+            const historyMap = periodHistory.reduce((acc, trade) => {
                 const accountName = trade.accountName;
                 if (!acc[accountName]) acc[accountName] = [];
                 acc[accountName].push(trade);
                 return acc;
             }, {});
-            const data = accounts.map((account, index) => {
+
+            tableData = accounts.map((account, index) => {
                 const trades = historyMap[account.accountName] || [];
                 const totalPL = trades.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
                 const totalTrades = trades.length;
-                
                 const currentBalance = account.balance || 0;
                 const percentagePL = currentBalance > 0 ? (totalPL / currentBalance) * 100 : 0;
+                
+                const magicNumber = parseInt(getEaIdentifier(account));
+                const robotLogs = periodActivity.filter(log => log.magicNumber === magicNumber && log.accountId === account.accountId);
+                let activeHours = 0;
+                let tradeRatio = 0;
+
+                if (robotLogs.length > 1) {
+                    const timestamps = robotLogs.map(log => log.timestamp).sort((a,b) => a - b);
+                    const durationInMillis = timestamps[timestamps.length - 1] - timestamps[0];
+                    activeHours = durationInMillis / (1000 * 60 * 60);
+                    if (activeHours > 0) {
+                        tradeRatio = totalTrades / activeHours;
+                    }
+                }
 
                 return {
                     'No.': index + 1,
                     'Periode': new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' }),
                     'Nama Akun': account.accountName,
                     'Nama Robot/EA': account.tradingRobotName || 'N/A',
+                    'Est. Jam Aktif (jam)': activeHours.toFixed(2),
+                    'Rasio Trade/Jam': tradeRatio.toFixed(2),
                     'Total trade': totalTrades,
                     'Total Profit/Loss': totalPL,
                     'Presentase (%)': percentagePL
                 };
             });
-            historyToProcess = data;
-            periodLabel = 'Bulanan';
         }
 
-        const worksheet = XLSX.utils.json_to_sheet(historyToProcess);
-        worksheet['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+        if (tableData.every(row => (row['Total Transaksi'] === 0 || row['Total trade'] === 0))) {
+            alert(alertMessage);
+            return;
+        }
+
+        const totalPLGlobal = periodHistory.reduce((sum, trade) => sum + (parseFloat(trade.pl) || 0), 0);
+        const totalTradesGlobal = periodHistory.length;
+        const winningTrades = periodHistory.filter(trade => (parseFloat(trade.pl) || 0) > 0).length;
+        const winRate = totalTradesGlobal > 0 ? (winningTrades / totalTradesGlobal) * 100 : 0;
+
+        const summaryData = [
+            { "Statistik": summaryTitle, "Nilai": "" },
+            { "Statistik": "Total Profit/Loss", "Nilai": totalPLGlobal },
+            { "Statistik": "Total Transaksi", "Nilai": totalTradesGlobal },
+            { "Statistik": "Win Rate", "Nilai": winRate }
+        ];
+
+        const worksheet = XLSX.utils.json_to_sheet(summaryData, { skipHeader: true });
+        XLSX.utils.sheet_add_json(worksheet, tableData, { origin: 'A5' });
+        worksheet[XLSX.utils.encode_cell({c: 1, r: 1})].z = '$#,##0.00';
+        worksheet[XLSX.utils.encode_cell({c: 1, r: 3})].z = '0.00"%"';
+
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let R = 4; R <= range.e.r; ++R) {
+            const plColIndex = period === 'weekly' ? 7 : 7;
+            const pctColIndex = period === 'weekly' ? 8 : 8;
+            
+            const plCellRef = XLSX.utils.encode_cell({c: plColIndex, r: R});
+            if(worksheet[plCellRef]) worksheet[plCellRef].z = '$#,##0.00';
+            
+            const pctCellRef = XLSX.utils.encode_cell({c: pctColIndex, r: R});
+            if(worksheet[pctCellRef]) worksheet[pctCellRef].z = '0.00"%"';
+        }
+
+        const colWidths = period === 'weekly'
+            ? [{ wch: 5 }, { wch: 22 }, { wch: 25 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 12 }]
+            : [{ wch: 5 }, { wch: 22 }, { wch: 25 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 18 }];
+        worksheet['!cols'] = colWidths;
+
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, `Ringkasan ${periodLabel}`);
         XLSX.writeFile(workbook, `Ringkasan_Trading_${periodLabel}.xlsx`);
@@ -475,7 +555,6 @@ const GlobalSummary = ({ accounts, tradeHistory, historyResetTimestamp }) => {
             });
         }
         
-        // Logika untuk ringkasan global tetap berdasarkan kalender (sejak Senin)
         const today = new Date();
         const day = today.getDay();
         const diff = today.getDate() - day + (day === 0 ? -6 : 1);
@@ -602,6 +681,7 @@ export default function App() {
     const [accountsData, setAccountsData] = useState({});
     const [accountOrder, setAccountOrder] = useState([]);
     const [tradeHistory, setTradeHistory] = useState({});
+    const [activityLogs, setActivityLogs] = useState({});
     const [searchTerm, setSearchTerm] = useState('');
     const [notifications, setNotifications] = useState([]);
     const [page, setPage] = useState('dashboard');
@@ -618,29 +698,24 @@ export default function App() {
     const dragOverItem = useRef(null);
     const [dragging, setDragging] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
-    const [togglingRobotId, setTogglingRobotId] = useState(null);
+    const [togglingRobotId, setTogglingRobotId] = useState(null); // <-- DIKEMBALIKAN
     const [showEaDeleteInfo, setShowEaDeleteInfo] = useState({ isOpen: false, eaName: '', eaId: null });
     
-    // --- KODE PERBAIKAN: Menambahkan ref dan logika untuk menyimpan/mengembalikan posisi scroll ---
     const mainContentRef = useRef(null);
-    const scrollPositions = useRef({ dashboard: 0, history: 0, eaOverview: 0 });
+    const scrollPositions = useRef({ dashboard: 0, history: 0, 'ea-overview': 0 });
 
     const handlePageChange = (newPage) => {
         if (mainContentRef.current) {
-            // Simpan posisi scroll halaman saat ini sebelum berganti
             scrollPositions.current[page] = mainContentRef.current.scrollTop;
         }
         setPage(newPage);
     };
 
-    // Gunakan useLayoutEffect untuk memastikan scroll diatur setelah render tapi sebelum browser melukis
     useLayoutEffect(() => {
         if (mainContentRef.current) {
-            // Kembalikan ke posisi scroll yang tersimpan untuk halaman baru
             mainContentRef.current.scrollTop = scrollPositions.current[page] || 0;
         }
     }, [page]);
-    // --- AKHIR PERBAIKAN ---
 
     const addNotification = (title, message, type) => setNotifications(prev => [{ id: Date.now(), title, message, type }, ...prev].slice(0, 5));
     const removeNotification = useCallback((id) => {
@@ -676,19 +751,43 @@ export default function App() {
         }
     };
     const handleCancelOrder = async (accountId, ticket) => {
+        const originalAccountsData = { ...accountsData };
         try {
+            setAccountsData(prev => {
+                const newAccountsData = JSON.parse(JSON.stringify(prev));
+                if(newAccountsData[accountId] && newAccountsData[accountId].orders) {
+                    newAccountsData[accountId].orders = newAccountsData[accountId].orders.filter(ord => ord.ticket !== ticket);
+                }
+                return newAccountsData;
+            });
             await fetch('/api/cancel-order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accountId, ticket }) });
             addNotification('Info', `Perintah pembatalan order #${ticket} telah dikirim.`, 'default');
-        } catch (error) { addNotification('Error', 'Gagal mengirim perintah pembatalan.', 'take_profit_loss'); }
+        } catch (error) { 
+            addNotification('Error', 'Gagal mengirim perintah pembatalan.', 'take_profit_loss');
+            setAccountsData(originalAccountsData);
+        }
     };
     const handleToggleRobot = async (accountId, newStatus) => {
-        setTogglingRobotId(accountId);
+        const originalAccountsData = { ...accountsData };
+        setTogglingRobotId(accountId); // <-- EFEK LOADING DIMULAI
         try {
+            // Pembaruan optimistis tetap dilakukan, namun tanpa mengubah state loading
+            setAccountsData(prev => {
+                const newAccountsData = JSON.parse(JSON.stringify(prev));
+                if(newAccountsData[accountId]) {
+                    newAccountsData[accountId].robotStatus = newStatus;
+                }
+                return newAccountsData;
+            });
             await fetch('/api/robot-toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accountId, newStatus }) });
         } catch (error) {
             addNotification('Error', 'Gagal mengirim perintah ke server.', 'take_profit_loss');
+            setAccountsData(originalAccountsData);
         } finally {
-            setTogglingRobotId(null);
+            // Hentikan loading setelah beberapa saat agar transisi terlihat
+            setTimeout(() => {
+                setTogglingRobotId(null); // <-- EFEK LOADING BERHENTI
+            }, 500); // Jeda 0.5 detik
         }
     };
     const openDeleteModal = (accountId, accountName) => setDeleteModal({ isOpen: true, accountId, accountName });
@@ -732,6 +831,8 @@ export default function App() {
         const accountsRef = ref(db, 'accounts/');
         const historyRef = ref(db, 'trade_history/');
         const orderRef = ref(db, 'dashboard_config/accountOrder');
+        const activityRef = ref(db, 'robot_activity_logs/');
+
         const unsubscribeAccounts = onValue(accountsRef, (snapshot) => {
             const data = snapshot.val() || {};
             if(initialLoadComplete.current) {
@@ -760,8 +861,19 @@ export default function App() {
         const unsubscribeHistory = onValue(historyRef, (snapshot) => {
             setTradeHistory(snapshot.val() || {});
         });
-        const unsubscribeOrder = onValue(orderRef, (snapshot) => setAccountOrder(snapshot.val() || []));
-        return () => { unsubscribeAccounts(); unsubscribeHistory(); unsubscribeOrder(); };
+        const unsubscribeOrder = onValue(orderRef, (snapshot) => {
+            setAccountOrder(snapshot.val() || []);
+        });
+        const unsubscribeActivity = onValue(activityRef, (snapshot) => {
+            setActivityLogs(snapshot.val() || {});
+        });
+
+        return () => { 
+            unsubscribeAccounts(); 
+            unsubscribeHistory(); 
+            unsubscribeOrder();
+            unsubscribeActivity();
+        };
     }, [speak, showNotification]);
 
     const accounts = useMemo(() => {
@@ -853,7 +965,6 @@ export default function App() {
         });
     }, [accountsData, tradeHistory]);
 
-    // --- KODE PERBAIKAN: Mengubah struktur layout utama ---
     return (
         <div className="bg-slate-900 text-white font-sans h-screen flex flex-col overflow-hidden">
             <style>{`
@@ -867,7 +978,6 @@ export default function App() {
             
             <InfoBanner />
 
-            {/* Area Konten yang Bisa di-scroll */}
             <div ref={mainContentRef} className="flex-1 overflow-y-auto custom-scrollbar">
                 <div className="p-4 sm:p-6 lg:p-8">
                     <div className="max-w-7xl mx-auto">
@@ -884,7 +994,6 @@ export default function App() {
                             </div>
                         </header>
                         
-                        {/* Kontainer untuk setiap halaman agar scroll position terpisah */}
                         <main>
                             <div style={{ display: page === 'dashboard' ? 'block' : 'none' }}>
                                 <div className="mb-8 relative">
@@ -901,7 +1010,14 @@ export default function App() {
 
                             <div style={{ display: page === 'history' ? 'block' : 'none' }}>
                                 <GlobalSummary accounts={accounts} tradeHistory={tradeHistory} historyResetTimestamp={historyResetTimestamp} />
-                                <HistoryPage accounts={accounts} tradeHistory={tradeHistory} addNotification={addNotification} historyResetTimestamp={historyResetTimestamp} onResetRequest={() => setShowResetConfirm(true)} />
+                                <HistoryPage 
+                                    accounts={accounts} 
+                                    tradeHistory={tradeHistory} 
+                                    activityLogs={activityLogs} 
+                                    addNotification={addNotification} 
+                                    historyResetTimestamp={historyResetTimestamp} 
+                                    onResetRequest={() => setShowResetConfirm(true)} 
+                                />
                             </div>
 
                             <div style={{ display: page === 'ea-overview' ? 'block' : 'none' }}>
@@ -909,7 +1025,7 @@ export default function App() {
                             </div>
                         </main>
                         
-                        <div className="h-24" /> {/* Spacer untuk navigasi bawah */}
+                        <div className="h-24" />
                     </div>
                 </div>
             </div>
@@ -917,7 +1033,6 @@ export default function App() {
             <BottomNav activePage={page} setPage={handlePageChange} />
             <ScrollToTopButton scrollableRef={mainContentRef} />
 
-            {/* Modal dan Notifikasi tetap di luar area scroll */}
             <NotificationToastContainer notifications={notifications} removeNotification={removeNotification} />
             <ConfirmationModal isOpen={deleteModal.isOpen} title="Konfirmasi Penghapusan" message={`Apakah Anda yakin ingin menghapus akun "${deleteModal.accountName}"? Tindakan ini akan menghapus data dari dasbor. Anda juga harus mematikan EA di akun ini agar tidak muncul kembali.`} onConfirm={handleDeleteAccount} onCancel={closeDeleteModal} confirmColorClass="from-red-500 to-orange-600" />
             <ConfirmationModal isOpen={showResetConfirm} title="Konfirmasi Reset Tampilan" message="Apakah Anda yakin ingin mereset tampilan riwayat? Ini hanya akan menampilkan data baru yang masuk setelah ini." onConfirm={handleConfirmReset} onCancel={() => setShowResetConfirm(false)} confirmText="Ya, Reset" confirmColorClass="from-sky-500 to-blue-600" />
