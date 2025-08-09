@@ -1,5 +1,5 @@
 // /api/index.js
-// Versi final dengan perbaikan parser untuk semua endpoint dari EA
+// Versi final dengan parser yang lebih kuat untuk semua endpoint dari EA
 
 const express = require('express');
 const cors = require('cors');
@@ -41,12 +41,23 @@ const checkDbConnection = (req, res, next) => {
 app.use('/api', checkDbConnection);
 
 
-// --- Endpoint yang Sudah Ada ---
+// --- FUNGSI PEMBANTU BARU UNTUK EKSTRAKSI JSON ---
+const extractJsonFromString = (rawString) => {
+    // Mencari string yang diawali dengan '{' dan diakhiri dengan '}'
+    const match = rawString.match(/\{.*\}/);
+    if (match && match[0]) {
+        return JSON.parse(match[0]);
+    }
+    throw new Error("JSON yang valid tidak ditemukan di dalam string.");
+};
+
+
+// --- Endpoint yang Diperbarui ---
 
 app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
-    const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
+    const rawBody = req.body.toString('utf-8');
     try {
-        const data = JSON.parse(rawBody);
+        const data = extractJsonFromString(rawBody); // Menggunakan fungsi ekstraksi baru
         const accountId = data.accountId;
         if (!accountId) return res.status(400).send({ error: 'accountId dibutuhkan' });
         
@@ -61,9 +72,63 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
             res.json({ status: 'ok', command: 'none' });
         }
     } catch (error) {
+        console.error("Error di /api/update:", error.message, "Body Mentah:", rawBody);
         res.status(400).send({ error: 'Gagal memproses data update.' });
     }
 });
+
+app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
+    const rawBody = req.body.toString('utf-8');
+    try {
+        const { accountId, history } = extractJsonFromString(rawBody); // Menggunakan fungsi ekstraksi baru
+        if (!accountId || !history || !Array.isArray(history)) {
+            return res.status(400).send({ error: 'Data riwayat tidak valid' });
+        }
+        
+        const historyRef = db.ref(`trade_history/${accountId}`);
+        const updates = {};
+        history.forEach(item => {
+            if (item.ticket) {
+                updates[item.ticket] = item;
+            } else {
+                const pushRef = historyRef.push();
+                updates[pushRef.key] = item;
+            }
+        });
+
+        await historyRef.update(updates);
+        res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
+    } catch (error) {
+        console.error('Gagal menyimpan riwayat:', error.message, "Body Mentah:", rawBody);
+        res.status(500).send({ error: 'Gagal menyimpan riwayat ke server.' });
+    }
+});
+
+app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => {
+    const rawBody = req.body.toString('utf-8');
+    try {
+        const { accountId, magicNumber } = extractJsonFromString(rawBody); // Menggunakan fungsi ekstraksi baru
+
+        if (accountId === undefined || magicNumber === undefined) {
+            return res.status(400).json({ message: 'Missing accountId or magicNumber' });
+        }
+
+        const activityRef = db.ref(`robot_activity_logs/${accountId}`);
+        
+        await activityRef.push({
+            magicNumber: magicNumber,
+            timestamp: admin.database.ServerValue.TIMESTAMP,
+        });
+
+        res.status(200).json({ message: 'Activity logged successfully' });
+    } catch (error) {
+        console.error('Error logging activity:', error.message, "Body Mentah:", rawBody);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+
+// --- Endpoint Lain (Tidak Berubah) ---
 
 app.get('/api/accounts', async (req, res) => {
     try {
@@ -111,33 +176,6 @@ app.get('/api/get-order', async (req, res) => {
     }
 });
 
-app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
-    const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
-    try {
-        const { accountId, history } = JSON.parse(rawBody);
-        if (!accountId || !history || !Array.isArray(history)) {
-            return res.status(400).send({ error: 'Data riwayat tidak valid' });
-        }
-        
-        const historyRef = db.ref(`trade_history/${accountId}`);
-        const updates = {};
-        history.forEach(item => {
-            if (item.ticket) {
-                updates[item.ticket] = item;
-            } else {
-                const pushRef = historyRef.push();
-                updates[pushRef.key] = item;
-            }
-        });
-
-        await historyRef.update(updates);
-        res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
-    } catch (error) {
-        console.error('Gagal menyimpan riwayat:', error);
-        res.status(500).send({ error: 'Gagal menyimpan riwayat ke server.' });
-    }
-});
-
 app.get('/api/get-history', async (req, res) => {
     try {
         const historyRef = db.ref('trade_history');
@@ -162,31 +200,5 @@ app.post('/api/cancel-order', express.json(), async (req, res) => {
         res.status(500).send({ error: 'Gagal mengirim perintah ke server.' });
     }
 });
-
-// --- PERBAIKAN DI SINI: Menggunakan parser RAW untuk log aktivitas ---
-app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => {
-    const rawBody = req.body.toString('utf-8').replace(/\0/g, '').trim();
-    try {
-        const { accountId, magicNumber } = JSON.parse(rawBody);
-
-        if (accountId === undefined || magicNumber === undefined) {
-            return res.status(400).json({ message: 'Missing accountId or magicNumber' });
-        }
-
-        const activityRef = db.ref(`robot_activity_logs/${accountId}`);
-        
-        await activityRef.push({
-            magicNumber: magicNumber,
-            timestamp: admin.database.ServerValue.TIMESTAMP,
-        });
-
-        res.status(200).json({ message: 'Activity logged successfully' });
-    } catch (error) {
-        console.error('Error logging activity:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
-});
-// --- AKHIR PERBAIKAN ---
-
 
 module.exports = app;
