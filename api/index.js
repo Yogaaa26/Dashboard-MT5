@@ -1,5 +1,5 @@
 // /api/index.js
-// Versi final dengan perbaikan parser untuk mengatasi SyntaxError
+// Versi final dengan penambahan endpoint /api/log-activity
 
 const express = require('express');
 const cors = require('cors');
@@ -14,8 +14,8 @@ try {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         if (admin.apps.length === 0) { 
             admin.initializeApp({
-              credential: admin.credential.cert(serviceAccount),
-              databaseURL: process.env.FIREBASE_DATABASE_URL 
+                credential: admin.credential.cert(serviceAccount),
+                databaseURL: process.env.FIREBASE_DATABASE_URL 
             });
             console.log("Firebase Admin SDK berhasil diinisialisasi.");
         }
@@ -124,7 +124,12 @@ app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
             return res.status(400).send({ error: 'Data riwayat tidak valid' });
         }
         
-        await db.ref(`trade_history/${accountId}`).set(history);
+        // Menggunakan push() untuk setiap item agar tidak menimpa data lama
+        const historyRef = db.ref(`trade_history/${accountId}`);
+        for (const item of history) {
+            await historyRef.push(item);
+        }
+        
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
     } catch (error) {
         console.error('Gagal menyimpan riwayat:', error);
@@ -142,7 +147,7 @@ app.get('/api/get-history', async (req, res) => {
     }
 });
 
-// --- ENDPOINT BARU UNTUK MEMBATALKAN ORDER ---
+// --- ENDPOINT UNTUK MEMBATALKAN ORDER ---
 app.post('/api/cancel-order', express.json(), async (req, res) => {
     const { accountId, ticket } = req.body;
     if (!accountId || !ticket) {
@@ -155,6 +160,30 @@ app.post('/api/cancel-order', express.json(), async (req, res) => {
     } catch (error) {
         console.error('Gagal mengirim perintah pembatalan:', error);
         res.status(500).send({ error: 'Gagal mengirim perintah ke server.' });
+    }
+});
+
+// --- ENDPOINT BARU UNTUK LOG AKTIVITAS (HEARTBEAT) ---
+app.post('/api/log-activity', express.json(), async (req, res) => {
+    try {
+        const { accountId, magicNumber } = req.body;
+
+        if (accountId === undefined || magicNumber === undefined) {
+            return res.status(400).json({ message: 'Missing accountId or magicNumber' });
+        }
+
+        const activityRef = db.ref(`robot_activity_logs/${accountId}`);
+        
+        // Menggunakan push() untuk membuat ID unik untuk setiap log
+        await activityRef.push({
+            magicNumber: magicNumber,
+            timestamp: admin.database.ServerValue.TIMESTAMP, // Gunakan timestamp server
+        });
+
+        res.status(200).json({ message: 'Activity logged successfully' });
+    } catch (error) {
+        console.error('Error logging activity:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
     }
 });
 
