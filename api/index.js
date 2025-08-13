@@ -1,21 +1,21 @@
 // /api/index.js
-// Versi yang dikembalikan ke awal, dengan penambahan endpoint log-activity
+// Versi final dengan perbaikan parsing JSON yang lebih robust untuk MQL
 
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const app = express();
 
-let db; // Deklarasikan db di scope yang lebih tinggi
+let db;
 
-// --- Inisialisasi Firebase Admin yang Lebih Aman ---
+// --- Inisialisasi Firebase Admin ---
 try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        if (admin.apps.length === 0) { 
+        if (admin.apps.length === 0) {
             admin.initializeApp({
                 credential: admin.credential.cert(serviceAccount),
-                databaseURL: process.env.FIREBASE_DATABASE_URL 
+                databaseURL: process.env.FIREBASE_DATABASE_URL
             });
             console.log("Firebase Admin SDK berhasil diinisialisasi.");
         }
@@ -27,41 +27,48 @@ try {
     console.error('Firebase Admin Initialization Error:', e.message);
 }
 
+// --- MIDDLEWARE ---
 app.use(cors());
+// CATATAN: app.use(express.json()) dihapus dari sini untuk penanganan per-rute.
 
-// Middleware untuk memeriksa koneksi DB
+// Middleware untuk memeriksa koneksi database sebelum melanjutkan
 const checkDbConnection = (req, res, next) => {
     if (!db) {
         return res.status(500).send({ error: 'Koneksi database gagal. Periksa log server.' });
     }
     next();
 };
-
-// Terapkan middleware ke semua rute
 app.use('/api', checkDbConnection);
 
-
-// --- FUNGSI PEMBANTU UNTUK EKSTRAKSI JSON ---
-const extractJsonFromString = (rawString) => {
-    // Membersihkan karakter null dan spasi berlebih
-    const cleanString = rawString.replace(/\0/g, '').trim();
-    const match = cleanString.match(/\{.*\}/);
-    if (match && match[0]) {
-        return JSON.parse(match[0]);
+// --- FUNGSI BANTU UNTUK PARSING DATA DARI EA ---
+// Fungsi ini akan membersihkan teks mentah dari EA sebelum di-parse
+const parseEaData = (rawText) => {
+    try {
+        // Cari kurung kurawal pertama dan terakhir untuk mengisolasi objek JSON
+        const firstBrace = rawText.indexOf('{');
+        const lastBrace = rawText.lastIndexOf('}');
+        if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+            throw new Error("Struktur JSON (kurung kurawal) tidak ditemukan.");
+        }
+        const jsonString = rawText.substring(firstBrace, lastBrace + 1);
+        return JSON.parse(jsonString);
+    } catch (e) {
+        console.error("Gagal mem-parse data dari EA. Teks Mentah:", rawText);
+        throw new Error("Format JSON dari EA tidak valid: " + e.message);
     }
-    throw new Error("JSON yang valid tidak ditemukan di dalam string.");
 };
 
 
-// --- Endpoint yang Sudah Ada ---
+// --- ENDPOINTS ---
 
-app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
-    const rawBody = req.body.toString('utf-8');
+// --- Endpoint yang dipanggil oleh EA (menggunakan parser teks yang lebih toleran) ---
+
+app.post('/api/update', express.text({ type: '*/*' }), async (req, res) => {
     try {
-        const data = extractJsonFromString(rawBody);
+        const data = parseEaData(req.body);
         const accountId = data.accountId;
         if (!accountId) return res.status(400).send({ error: 'accountId dibutuhkan' });
-        
+
         await db.ref(`accounts/${accountId}`).set(data);
 
         const commandRef = db.ref(`commands/${accountId}`);
@@ -73,53 +80,54 @@ app.post('/api/update', express.raw({ type: '*/*' }), async (req, res) => {
             res.json({ status: 'ok', command: 'none' });
         }
     } catch (error) {
-        console.error("Error di /api/update:", error.message);
+        console.error("Error di /api/update:", error.message, "Body:", req.body);
         res.status(400).send({ error: 'Gagal memproses data update.' });
     }
 });
 
-app.post('/api/log-history', express.raw({ type: '*/*' }), async (req, res) => {
-    const rawBody = req.body.toString('utf-8');
+app.post('/api/log-history', express.text({ type: '*/*' }), async (req, res) => {
     try {
-        const { accountId, history } = extractJsonFromString(rawBody);
+        const { accountId, history } = parseEaData(req.body);
         if (!accountId || !history || !Array.isArray(history)) {
             return res.status(400).send({ error: 'Data riwayat tidak valid' });
         }
-        
-        await db.ref(`trade_history/${accountId}`).set(history);
+
+        const historyRef = db.ref(`trade_history/${accountId}`);
+        await historyRef.set(history);
+
         res.status(200).json({ message: `Riwayat untuk akun ${accountId} berhasil disimpan.` });
     } catch (error) {
-        console.error('Gagal menyimpan riwayat:', error.message);
+        console.error('Gagal menyimpan riwayat:', error.message, "Body:", req.body);
         res.status(500).send({ error: 'Gagal menyimpan riwayat ke server.' });
     }
 });
 
-// --- ENDPOINT BARU UNTUK LOG AKTIVITAS (HEARTBEAT) ---
-app.post('/api/log-activity', express.raw({ type: '*/*' }), async (req, res) => {
-    const rawBody = req.body.toString('utf-8');
+app.post('/api/log-activity', express.text({ type: '*/*' }), async (req, res) => {
     try {
-        const { accountId, magicNumber } = extractJsonFromString(rawBody);
+        const { accountId, magicNumber } = parseEaData(req.body);
 
         if (accountId === undefined || magicNumber === undefined) {
+            console.error("Data tidak lengkap diterima:", req.body);
             return res.status(400).json({ message: 'Missing accountId or magicNumber' });
         }
 
         const activityRef = db.ref(`robot_activity_logs/${accountId}`);
-        
         await activityRef.push({
             magicNumber: magicNumber,
-            timestamp: admin.database.ServerValue.TIMESTAMP,
+            accountId: accountId,
+            timestamp: admin.database.ServerValue.TIMESTAMP
         });
 
+        console.log(`Aktivitas berhasil dicatat untuk akun: ${accountId}`);
         res.status(200).json({ message: 'Activity logged successfully' });
     } catch (error) {
-        console.error('Error logging activity:', error.message);
+        console.error('Error logging activity:', error.message, "Body:", req.body);
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
 
 
-// --- Endpoint Lainnya ---
+// --- Endpoint yang dipanggil oleh Frontend Web (menggunakan parser JSON yang ketat) ---
 
 app.get('/api/accounts', async (req, res) => {
     try {
@@ -192,4 +200,5 @@ app.post('/api/cancel-order', express.json(), async (req, res) => {
     }
 });
 
+// Export app untuk Vercel
 module.exports = app;
